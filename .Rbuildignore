@@ -4,3 +4,4 @@
 ^\.git$
 ^\.claude$
 ^tools$
+\.DS_Store$
