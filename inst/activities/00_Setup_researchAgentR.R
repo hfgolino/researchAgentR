@@ -125,7 +125,7 @@ try(set_gemini_key())
 try(set_mistral_key())
 try(set_cerebras_key())
 try(set_openrouter_key())
-try(set_semantic_scholar_key())
+try(set_semantic_scholar_key())   # optional; keys are approved by hand
 try(set_ncbi_key())
 try(set_brave_key())
 

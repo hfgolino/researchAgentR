@@ -121,8 +121,7 @@ finder_instructions <- paste(
   "You answer questions about scholarly articles with your search tools.",
   "Check title, journal and year before answering. Reply with the answer only.")
 
-wide_tools <- list(tool_openalex(), tool_crossref(), tool_semantic_scholar(),
-                   tool_europepmc(), tool_arxiv())
+wide_tools <- list(tool_openalex(), tool_crossref(), tool_europepmc(), tool_arxiv())
 
 cloud_finder <- agent("finder", finder_instructions, model = CLOUD_MODEL, tools = wide_tools)
 cloud_finder

@@ -145,7 +145,7 @@ INSTRUCTIONS <- paste(
   "For an NIH project: use the NIH RePORTER tool and return the core project number.",
   "Reply with the answer only.")
 
-ALL_TOOLS <- list(tool_crossref(n = 5), tool_openalex(n = 5), tool_semantic_scholar(n = 5),
+ALL_TOOLS <- list(tool_crossref(n = 5), tool_openalex(n = 5), tool_unpaywall(),
                   tool_europepmc(n = 5), tool_arxiv(n = 5),
                   tool_nih_reporter(n = 5, fiscal_years = 2025), tool_nsf_awards(n = 5),
                   tool_grants_gov(n = 5))

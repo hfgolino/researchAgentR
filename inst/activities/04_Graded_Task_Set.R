@@ -223,7 +223,7 @@ scout <- agent(
   description = "Finds and verifies key literature on a research topic.",
   instructions = paste(
     "You are a careful literature scout for a researcher in psychology.",
-    "1. Search OpenAlex first, then Semantic Scholar or Crossref with different keywords.",
+    "1. Search OpenAlex first, then Crossref with different keywords.",
     "   Use Europe PMC only for health topics and arXiv only for methods preprints.",
     "2. Snowball (references or citations) from the one or two most relevant papers.",
     "3. Only report works that appeared in a tool result. Never write a DOI from memory.",
@@ -231,7 +231,7 @@ scout <- agent(
     "   with its title, first author and year. Drop every work that is not VERIFIED.",
     "5. Prefer peer-reviewed articles; say so in why_relevant when a work is a preprint."),
   model = "groq:openai/gpt-oss-120b",
-  tools = list(tool_openalex(n = 5), tool_semantic_scholar(n = 5), tool_crossref(n = 5),
+  tools = list(tool_openalex(n = 5), tool_crossref(n = 5),
                tool_europepmc(n = 5), tool_arxiv(n = 5), tool_snowball(n = 5),
                tool_unpaywall(), tool_verify_citations()),
   output_schema = list(

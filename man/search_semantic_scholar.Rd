@@ -30,12 +30,14 @@ Relevance search in the \href{https://www.semanticscholar.org}{Semantic Scholar}
 Academic Graph, which often has abstracts that Crossref lacks.
 }
 \details{
-A key is optional (request one at
-\url{https://www.semanticscholar.org/product/api}; store it as
+Use it with a key. Keys are free but approved by hand (request one
+at \url{https://www.semanticscholar.org/product/api}; store it as
 \code{SEMANTIC_SCHOLAR_API_KEY} in \verb{~/.Renviron}); it is sent in the
-\code{x-api-key} header. Without a key, requests go to a pool shared by all
-unauthenticated users (see the API page for current limits); a 429
-reply is retried with backoff. The function keeps at least one second
+\code{x-api-key} header. Without a key, requests go to one pool shared by all
+unauthenticated users and are often refused (HTTP 429), so the function
+tries only twice and the course activities treat Semantic Scholar as
+optional; \code{\link[=search_openalex]{search_openalex()}} and \code{\link[=search_crossref]{search_crossref()}} need no approval.
+The function keeps at least one second
 between requests, the limit for keyed access. At most 100 results per request
 (\url{https://api.semanticscholar.org/graph/v1/swagger.json}, accessed
 2026-10-11). The Semantic Scholar API license requires attribution: the

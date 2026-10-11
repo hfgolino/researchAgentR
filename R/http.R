@@ -16,7 +16,11 @@
     req <- httr2::req_headers(req, `x-api-key` = key, `anthropic-version` = "2023-06-01",
                               .redact = "x-api-key")
   }
-  if (length(headers)) req <- do.call(httr2::req_headers, c(list(req), headers))
+  if (length(headers)) {
+    # header keys (x-api-key and similar) never appear when a request is printed
+    secret <- names(headers)[grepl("key|token|authorization", names(headers), ignore.case = TRUE)]
+    req <- do.call(httr2::req_headers, c(list(req), headers, list(.redact = secret)))
+  }
   if (!is.null(body)) req <- httr2::req_body_json(req, body, auto_unbox = TRUE, null = "null", digits = NA)
   if (!is.null(method)) req <- httr2::req_method(req, method)
   req <- httr2::req_user_agent(req, paste0("researchAgentR/", utils::packageVersion("researchAgentR"),

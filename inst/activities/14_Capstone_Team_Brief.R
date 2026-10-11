@@ -104,12 +104,12 @@ literature_scout <- agent(
   name = "literature_scout",
   description = "Finds published papers on a topic and returns DOIs with verbatim quotes from their abstracts.",
   instructions = paste(
-    "Find 5 to 8 relevant, published papers on the topic you are given. Use OpenAlex and",
-    "Semantic Scholar to search and Crossref to confirm DOIs. For each paper give one key",
+    "Find 5 to 8 relevant, published papers on the topic you are given. Use OpenAlex",
+    "to search and Crossref to confirm DOIs. For each paper give one key",
     "finding and a VERBATIM quote (one sentence, copied exactly) from the abstract the",
     "tool returned. Never write a quote from memory; skip papers without an abstract."),
   model = WORKER,
-  tools = list(tool_openalex(n = 8), tool_semantic_scholar(n = 5), tool_crossref(n = 5)),
+  tools = list(tool_openalex(n = 8), tool_crossref(n = 5)),
   output_schema = list(papers = arg_array("The papers found", arg_object("One paper", fields = list(
     doi = arg_string("The DOI, for example 10.1037/xxxx"),
     title = arg_string("The title"),

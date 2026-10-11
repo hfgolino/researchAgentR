@@ -23,7 +23,8 @@
 #   normalize_doi()            one standard form for DOIs ("10.xxxx/...", lower case)
 #   search_openalex()          OpenAlex: free index of scholarly works (key: $1/day budget)
 #   search_crossref()          Crossref: the DOI registry (polite pool with your email)
-#   search_semantic_scholar()  Semantic Scholar: relevance search, abstracts
+#   search_semantic_scholar()  Semantic Scholar (optional: only with a key, which is
+#                              approved by hand and can take weeks)
 #   search_europepmc()         Europe PMC: PubMed, PMC and preprints (health sciences)
 #   search_arxiv()             arXiv: preprints in statistics, CS, mathematics
 #   get_work()                 one work from OpenAlex by DOI (free lookup)
@@ -32,14 +33,14 @@
 #   find_open_access()         a free, legal full text (Unpaywall, or OpenAlex)
 #   dedupe_records()           remove duplicates across databases, keep provenance
 #   prisma_counts()            PRISMA 2020 flow-diagram numbers, computed from data
-#   tool_openalex(), tool_crossref(), tool_semantic_scholar(), tool_europepmc(),
+#   tool_openalex(), tool_crossref(), tool_europepmc(),
 #   tool_arxiv(), tool_unpaywall(), tool_snowball()   the same searches as agent tools
 #   verify_citations()         does the DOI exist? do title, author, year match? retracted?
 #   tool_verify_citations()    the same check as an agent tool
 #   check_claims()             is the quoted evidence really in the source?
 #
 # TIME: about 60 minutes.  COST: free tier (Groq, OpenAlex, Crossref,
-# Semantic Scholar, Europe PMC, arXiv). The OpenAlex searches below use well
+# Europe PMC, arXiv; Semantic Scholar only with a key). The OpenAlex searches below use well
 # under one cent of the free daily budget.
 # ==============================================================================
 
@@ -133,11 +134,18 @@ mean(is.na(cr$abstract))        # share of records WITHOUT an abstract
 # EXPECTED OUTPUT: up to 25 rows; many abstracts are NA, because publishers
 # do not always deposit abstracts with Crossref.
 
-# --- Semantic Scholar: relevance search with abstracts ------------------------
-s2 <- search_semantic_scholar(topic, n = 25, year = "2017-2026")
-head(s2[, c("title", "year", "doi", "cited_by_count")])
-# EXPECTED OUTPUT: up to 25 rows. Without a key, requests share a pool with all
-# unauthenticated users, so a 429 (rate limit) is retried automatically.
+# --- Semantic Scholar (OPTIONAL: only with a key) -----------------------------
+# Without a key, requests go to one pool shared by every unauthenticated user
+# in the world and are often refused (HTTP 429). Keys are free but approved by
+# hand (https://www.semanticscholar.org/product/api), so the course does not
+# depend on them. With SEMANTIC_SCHOLAR_API_KEY in ~/.Renviron, this runs:
+if (nzchar(Sys.getenv("SEMANTIC_SCHOLAR_API_KEY"))) {
+  s2 <- search_semantic_scholar(topic, n = 25, year = "2017-2026")
+  head(s2[, c("title", "year", "doi", "cited_by_count")])
+} else {
+  s2 <- oa[0, ]   # no key: an empty table with the same columns
+}
+# EXPECTED OUTPUT: with a key, up to 25 rows; without one, nothing prints.
 # The Semantic Scholar API license asks you to credit Semantic Scholar.
 
 # --- Europe PMC: biomedical and health literature -----------------------------
@@ -260,8 +268,8 @@ table(screen, useNA = "ifany")
 prisma <- prisma_counts(all_records, deduped, screening = screen)
 prisma
 # EXPECTED OUTPUT: a data frame with columns stage, database and n: one
-# "Records identified" row per source (OpenAlex, Crossref, Semantic Scholar,
-# Europe PMC, arXiv, Citation searching), the total, duplicates removed,
+# "Records identified" row per source (OpenAlex, Crossref, Europe PMC, arXiv,
+# Citation searching, and Semantic Scholar when it was searched), the total, duplicates removed,
 # records after removing duplicates, records screened, excluded, awaiting a
 # human decision, and retained. Every number comes from R objects, so an
 # agent cannot report counts that the code did not produce.
@@ -278,7 +286,6 @@ prisma
 # gpt-oss-120b; check console.groq.com/settings/limits).
 scout_tools <- list(
   tool_openalex(n = 5),
-  tool_semantic_scholar(n = 5),
   tool_crossref(n = 5),
   tool_europepmc(n = 5),
   tool_arxiv(n = 5),
@@ -286,6 +293,10 @@ scout_tools <- list(
   tool_unpaywall(),
   tool_verify_citations()
 )
+# With a Semantic Scholar key (optional), give the scout one more database:
+if (nzchar(Sys.getenv("SEMANTIC_SCHOLAR_API_KEY"))) {
+  scout_tools <- c(scout_tools, list(tool_semantic_scholar(n = 5)))
+}
 tool_openalex(n = 5)                       # what the model reads about the tool
 cat(tool_schema(tool_snowball()), "\n")    # the JSON Schema the model receives
 # EXPECTED OUTPUT: the tool's name, description and arguments (query, n,
@@ -313,7 +324,7 @@ scout <- agent(
   description = "Finds and verifies key literature on a research topic.",
   instructions = paste(
     "You are a careful literature scout for a researcher in psychology.",
-    "1. Search OpenAlex first, then Semantic Scholar or Crossref with different keywords.",
+    "1. Search OpenAlex first, then Crossref with different keywords.",
     "   Use Europe PMC only for health topics and arXiv only for methods preprints.",
     "2. Snowball (references or citations) from the one or two most relevant papers.",
     "3. Only report works that appeared in a tool result. Never write a DOI from memory.",
@@ -436,7 +447,7 @@ abstract_of <- function(doi) {
   w <- get_work(doi)
   a <- w$abstract
   if (is.na(a)) {   # some publishers do not share abstracts with OpenAlex
-    hit <- search_semantic_scholar(w$title, n = 1)
+    hit <- search_europepmc(paste0('DOI:"', normalize_doi(doi), '"'), n = 1)
     if (nrow(hit) && identical(normalize_doi(hit$doi[1]), normalize_doi(doi))) a <- hit$abstract[1]
   }
   a
@@ -537,7 +548,8 @@ attr(claim_judged, "cost")
 #   verify_citations() makes one or two Crossref requests per DOI, so 30
 #   citations take about a minute. Set RESEARCHAGENTR_EMAIL.
 # - Semantic Scholar 429 without a key: the unauthenticated pool is shared by
-#   everyone; the request is retried with backoff, but may still fail.
+#   everyone and often refuses requests. That is why it is optional here: the
+#   course runs on OpenAlex, Crossref, Europe PMC and arXiv.
 # - arXiv returns nothing for long queries (every word is ANDed), and its
 #   terms ask for one request every three seconds (the package waits).
 # - Europe PMC covers the life and health sciences: a methods topic can give

@@ -513,12 +513,14 @@ search_crossref <- function(query, n = 10, filter = NULL) {
 #' Relevance search in the [Semantic Scholar](https://www.semanticscholar.org)
 #' Academic Graph, which often has abstracts that Crossref lacks.
 #'
-#' @details A key is optional (request one at
-#'   <https://www.semanticscholar.org/product/api>; store it as
+#' @details Use it with a key. Keys are free but approved by hand (request one
+#'   at <https://www.semanticscholar.org/product/api>; store it as
 #'   `SEMANTIC_SCHOLAR_API_KEY` in `~/.Renviron`); it is sent in the
-#'   `x-api-key` header. Without a key, requests go to a pool shared by all
-#'   unauthenticated users (see the API page for current limits); a 429
-#'   reply is retried with backoff. The function keeps at least one second
+#'   `x-api-key` header. Without a key, requests go to one pool shared by all
+#'   unauthenticated users and are often refused (HTTP 429), so the function
+#'   tries only twice and the course activities treat Semantic Scholar as
+#'   optional; [search_openalex()] and [search_crossref()] need no approval.
+#'   The function keeps at least one second
 #'   between requests, the limit for keyed access. At most 100 results per request
 #'   (<https://api.semanticscholar.org/graph/v1/swagger.json>, accessed
 #'   2026-10-11). The Semantic Scholar API license requires attribution: the
@@ -547,6 +549,10 @@ search_semantic_scholar <- function(query, n = 10,
                   query = Filter(Negate(is.null), list(query = query, limit = n, fields = fields,
                                                        year = year)),
                   realm = "semantic_scholar", rpm = 60)
+  if (!nzchar(key)) {
+    .msg("Semantic Scholar without a key: the shared pool often refuses requests (HTTP 429).")
+    req <- httr2::req_retry(req, max_tries = 2, is_transient = .is_transient)
+  }
   body <- .lit_perform(req, "semantic_scholar", 1.05, "Semantic Scholar")$body
   out <- .lit_bind(lapply(body$data %||% list(), .lit_parse_s2))
   attr(out, "total_found") <- body$total %||% NA
