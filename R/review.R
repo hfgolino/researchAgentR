@@ -179,6 +179,11 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
       part <- sub("^\\s*((see|e\\.g\\.,?|cf\\.|also|for example,?|for a review,? see)\\s+)+", "",
                   part, perl = TRUE, ignore.case = TRUE)
       author <- regmatches(part, regexpr(.surname_re, part, perl = TRUE))
+      if (!length(author)) {   # a lower-case organization: "(groq, 2024)"
+        author <- regmatches(part, regexpr(paste0("^\\s*\\p{L}[\\p{L}'\u2019-]+(?=,\\s*(?:", .year_re, "))"),
+                                           part, perl = TRUE))
+        author <- trimws(author)
+      }
       years <- years_in(part)
       if (!length(author) || !length(years) || author %in% .not_names) next
       # The name must come before the first year ("2019 Lee" is not a citation).
@@ -205,8 +210,12 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
 # (2019).") and the year is the first year in parentheses, or else the first
 # year anywhere.
 .parse_reference <- function(entry) {
-  head <- sub(",.*$", "", entry)
+  # the author part ends at the first comma or at "(year)", whichever comes first
+  head <- sub(paste0("\\s*\\((?:", .year_re, ")\\).*$"), "", entry, perl = TRUE)
+  head <- sub(",.*$", "", head)
   author <- regmatches(head, regexpr(.surname_re, head, perl = TRUE))
+  # an organization written in lower case ("groq. (2024)")
+  if (!length(author)) author <- regmatches(head, regexpr("\\p{L}[\\p{L}'\u2019-]+", head, perl = TRUE))
   y <- regmatches(entry, regexpr(paste0("\\((", .year_re, ")\\)"), entry, perl = TRUE))
   y <- if (length(y)) gsub("[()]", "", y) else regmatches(entry, regexpr(.year_re, entry, perl = TRUE))
   if (!length(author) || !length(y)) return(NULL)
@@ -257,7 +266,7 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
     }
   }
   if (!is.null(parsed)) {
-    uncited <- parsed[!parsed$key %in% cites$key, , drop = FALSE]
+    uncited <- parsed[!.cite_found(parsed$key, cites$key %||% character(0)), , drop = FALSE]
     for (i in seq_len(nrow(uncited))) {
       rows[[length(rows) + 1]] <- .suggestion(
         "check", refs$file[1], refs$section[1], "references", "medium",

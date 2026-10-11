@@ -9,7 +9,7 @@
 # known answer key, and apply only the suggestions you accept to a COPY.
 # OVERVIEW: review_manuscript() combines
 #   1. checks in code: in-text citations against the reference list (both
-#      directions), DOIs (online), reported statistics (statcheck package),
+#      directions), DOIs (online), reported p-values (recomputed in base R),
 #      your style rules, figure and table labels, and whether R code runs;
 #   2. one reviewer model call per section, with a structured output in which
 #      every suggestion must QUOTE the text it refers to;
@@ -89,25 +89,18 @@ table(checks$category, checks$severity)
 attr(checks, "notes")
 
 # EXPECTED OUTPUT (computed offline on the planted-error manuscript):
-# "31 suggestions (31 from checks in code, 0 from the model): 6 high, 6
-# medium, 19 low"; 11 rows of category "references" and 20 of "style". Notes:
-# 4 reference entries could not be parsed, DOIs not checked because
-# confidential = TRUE, and statistics not checked unless the statcheck
-# package is installed. The high rows are in-text citations with no matching
-# reference entry, for example "No reference list entry matches Clark (2016)".
+# "22 suggestions (22 from checks in code, 0 from the model): 1 high, 2
+# medium, 19 low"; 1 row of category "references", 1 of "reporting" and 20
+# of "style". Notes: DOIs not checked because confidential = TRUE, and "1 test
+# result(s) checked in base R". The high row is the in-text citation with no
+# matching reference entry, "No reference list entry matches Clark (2016)";
+# the reporting row is the p-value that does not match t(63) = 2.31
+# (recomputed p = 0.0242).
 #
-# Read the rows: checks in code are proxies, and several of these rows are
-# FALSE ALARMS. APA 7 reference entries with more than 20 authors list 19
-# names, then ". . .", then the last author. researchAgentR 0.1.0 splits such
-# an entry in two at the ellipsis (reported to the package author): the entry
-# "Team, G., Mesnard, T., ... . . . Kenealy, K. (2024). Gemma: ..." becomes an
-# unparsed piece plus "Kenealy, K. (2024)". So "(Team et al., 2024)" finds no
-# match (a high row) and "Kenealy (2024)" looks uncited (a medium row). The
-# same happens to Lightman/Cobbe, White/Schmidt and DeepSeek/Zou. The entry
-# "groq. (2024)" starts with a lowercase organization name, so its author is
-# read as "Bringing". Of the high rows, only Clark (2016) is a planted error
-# (Step 3); check the others by hand. Every row says how it was found, in the
-# rationale column.
+# Read the rows: checks in code are proxies. The 19 low rows are style-rule
+# hits (em dashes and "we"/"our"), each with the exact sentence quoted; they
+# follow YOUR rules, so a rule you do not hold should be removed (Step 2).
+# Every row says how it was found, in the rationale column.
 # as.data.frame() before subsetting: the print method of a review needs its
 # attributes, which a subset drops.
 as.data.frame(checks)[checks$severity == "high", c("id", "quote", "suggestion")]
@@ -121,9 +114,9 @@ attr(checks_online, "notes")
 # EXPECTED OUTPUT: a note "N DOI(s) checked." and a high-severity row for
 # every DOI that was not found or is marked as retracted.
 
-# A reported statistic can be recomputed in one line. statcheck (Nuijten and
-# Polanin, 2020) does this for every APA-style result when it is installed:
-# install.packages("statcheck"). By hand, for t(63) = 2.31:
+# A reported statistic can be recomputed in one line. review_checks() does
+# this for t, F, r, z and chi-square results; statcheck (Nuijten and Polanin,
+# 2020), when installed, covers more formats. By hand, for t(63) = 2.31:
 2 * pt(-2.31, df = 63)
 
 # EXPECTED OUTPUT (computed offline): 0.02417681, a two-tailed p of about .024.
@@ -173,10 +166,10 @@ recall_table(checks, key)
 recall_table(checks2, key)
 
 # EXPECTED OUTPUT (computed offline): six planted errors. With the default
-# rules, code finds 2 of 6 (the citation without a reference and the
-# "delve"/em dash insertion); with my_rules, 3 of 6 (the overclaim too). The
-# sample-size mismatch needs arithmetic across sections, the wrong p-value
-# needs statcheck, and the invalid DOI needs the online check: Step 5 asks
+# rules, code finds 3 of 6 (the citation without a reference, the wrong
+# p-value and the "delve"/em dash insertion); with my_rules, 4 of 6 (the
+# overclaim too). The sample-size mismatch needs arithmetic across sections,
+# and the invalid DOI needs the online check: Step 5 asks
 # whether a model reviewer finds what code missed.
 
 
@@ -373,10 +366,10 @@ if (length(accept_ids)) {
 # - "No reference list found": the reference section must have a heading
 #   such as "References" or "Bibliography". Numbered citation styles ([1])
 #   and LaTeX \cite{} keys are not cross-checked.
-# - The citation check makes false alarms: entries with more than 20 authors
-#   (". . ." before the last author) are split in two in researchAgentR
-#   0.1.0, and organization authors written in lowercase or in several words
-#   ("groq.", "R Core Team") are not matched. Read the rows before acting.
+# - The citation check compares the first author and the year only, so it
+#   can still raise false alarms: organizations written in several words
+#   ("R Core Team" cited as "(R Core Team, 2024)") or two authors with the
+#   same surname and year. Read the rows before acting.
 # - A .txt manuscript, or text before the first heading, has no section name
 #   (NA). In researchAgentR 0.1.0, review_manuscript() then sends those
 #   paragraphs to the reviewer as "NA" (reported to the package author). Work

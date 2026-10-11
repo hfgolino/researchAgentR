@@ -198,6 +198,14 @@ registry_set <- function(model, ...) {
 .model_info <- function(m) {
   r <- model_registry()
   row <- r[r$provider == m$provider & r$model == m$model, , drop = FALSE]
+  if (nrow(row) == 0) {
+    # A provider registered by the user at the same address as a built-in one
+    # (for example Groq's Responses API) uses the built-in prices.
+    p <- providers()
+    base <- p$base_url[p$provider == m$provider]
+    twins <- setdiff(p$provider[p$base_url %in% base], m$provider)
+    row <- r[r$provider %in% twins & r$model == m$model, , drop = FALSE]
+  }
   if (nrow(row) == 0) return(NULL)
   as.list(row[1, ])
 }
@@ -205,6 +213,8 @@ registry_set <- function(model, ...) {
 # Cost of one call from normalized usage (see .usage()).
 .cost <- function(m, usage) {
   info <- .model_info(m)
+  local <- tryCatch(isTRUE(.provider_info(m$provider)$local), error = function(e) FALSE)
+  if (is.null(info) && local) return(0)   # a model on this computer bills nothing
   if (is.null(info)) {
     if (!isTRUE(.pkg_env$warned_price[[m$id]])) {
       .pkg_env$warned_price[[m$id]] <- TRUE

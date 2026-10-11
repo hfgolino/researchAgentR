@@ -166,3 +166,10 @@ test_that("citation keys match organizational authors by prefix and year", {
   expect_equal(f(c("deepseek_2024", "lee_2019", "smith_2020"),
                  c("deepseekai_2024", "leeds_2019", "smith_2021")), c(TRUE, FALSE, FALSE))
 })
+
+test_that("lower-case organizations are matched in text and reference list", {
+  r <- researchAgentR:::.parse_reference("groq. (2024). Bringing speed to mission. Retrieved from https://groq.com")
+  expect_equal(r$key, "groq_2024")
+  ct <- researchAgentR:::.intext_citations("Models on the Groq API (groq, 2024) were used.")
+  expect_true("groq_2024" %in% ct$key)
+})

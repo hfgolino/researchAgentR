@@ -26,12 +26,12 @@ caught_rows <- as.data.frame(rv_checks)[!is.na(rv_checks$error_id),
                                         c("error_id", "category", "suggestion")]
 caught_rows$check <- ifelse(grepl("No reference list entry", caught_rows$suggestion), "citation cross-check",
                      ifelse(grepl("DOI", caught_rows$suggestion), "DOI lookup (verify_citations)",
-                     ifelse(grepl("p-value", caught_rows$suggestion), "statistics (statcheck)",
+                     ifelse(grepl("p-value", caught_rows$suggestion), "statistics (p recomputed)",
                      ifelse(grepl("rule:", caught_rows$suggestion), "style rule", "other"))))
 caught_rows[order(caught_rows$error_id), c("error_id", "check")]
 # EXPECTED OUTPUT: error 1 by the citation cross-check, error 5 by style rules
-# (one banned_word and two em_dash rows), and, with statcheck and network
-# access, error 3 by statcheck and error 6 by the DOI lookup.
+# (one banned_word and two em_dash rows), error 3 by the p-value check, and,
+# with network access, error 6 by the DOI lookup.
 
 
 # ==============================================================================
@@ -61,8 +61,7 @@ data.frame(caught = sum(key$id %in% rv2$error_id),
            false_alarms = sum(!rv2$pre_existing & is.na(rv2$error_id)),
            prove_flags_on_original = sum(grepl("rule: prove", rv2o$suggestion)))
 # EXPECTED OUTPUT: the overclaim (4) is now caught, in addition to errors 1
-# and 5 (and 3 when statcheck is installed; DOIs, error 6, are not checked
-# with confidential = TRUE), no new false alarms, and 0 "prove" flags on the
+# 3 and 5 (DOIs, error 6, are not checked with confidential = TRUE), no new false alarms, and 0 "prove" flags on the
 # original excerpt. A rule
 # catches this overclaim; it would miss "demonstrates conclusively" or
 # "establishes". Rules are cheap, exact and narrow.

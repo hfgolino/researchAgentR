@@ -322,9 +322,9 @@ rv_checks   <- review_checks(f_planted,  rules = rules, run_code = FALSE)
 rv_original <- review_checks(f_original, rules = rules, run_code = FALSE)
 print(rv_checks, n = Inf)
 # EXPECTED OUTPUT: "checks in code only", cost $0, and notes on what was
-# checked (DOIs online; statistics only if the statcheck package is
-# installed). Rows: citations without a reference entry, reference entries
-# not cited, DOIs not found, p-values that do not match (statcheck), and
+# checked (DOIs online; p-values recomputed in base R, or with statcheck
+# when it is installed). Rows: citations without a reference entry, reference
+# entries not cited, DOIs not found, p-values that do not match, and
 # style-rule hits with the exact sentence quoted.
 
 review_report(rv_checks, "review_checks.html")
@@ -366,10 +366,9 @@ grades <- data.frame(
   cost         = attr(rv_checks, "cost"))
 grades
 key[, c("id", "type", "caught_by_checks")]
-# EXPECTED OUTPUT: which of the six errors the free checks caught. Without
-# statcheck and without network access, only the missing reference (1) and
-# the em dash and "delve" (5) are caught; with statcheck installed and the
-# network on, the p-value (3) and the invented DOI (6) are caught too. The
+# EXPECTED OUTPUT: which of the six errors the free checks caught: the
+# missing reference (1), the wrong p-value (3), the em dash and "delve" (5),
+# and, with the network on, the invented DOI (6). The
 # sample size (2) and the overclaim (4) need reading, by a person or a model.
 # Offline, every DOI lookup fails; read the notes of the review before
 # trusting any DOI row (see WHAT CAN GO WRONG).
@@ -529,16 +528,16 @@ summary_table
 # - A worker stops with max_steps or max_cost: its tool result says it
 #   stopped without an answer; the lead continues without it. That is a
 #   counted failure, visible in sub_episodes().
-# - "4 reference entries could not be parsed" and flags such as "No reference
-#   list entry matches Team (2024)": the citation parser splits APA entries
-#   whose author list contains ". . .". These flags are pre-existing (also on
-#   the original) and are not counted as false alarms of the planted set.
+# - A "No reference list entry matches ..." flag that is not a planted error:
+#   the parser compares first author and year only, so organizations written
+#   in several words can be missed. Check such rows by hand.
 # - DOI rows: verify_citations() needs the network. Offline (or when Crossref
 #   and OpenAlex are down) the lookups fail, and the review currently reports
 #   EVERY DOI as "not found". Check the message "verify_citations(): ...
 #   error = N" and the notes; a failed lookup is not evidence of a bad DOI.
 #   Use confidential = TRUE to skip the online check when offline.
-# - "Statistics not checked": install.packages("statcheck").
+# - Only t, F, r, z and chi-square results in APA form are recomputed without
+#   statcheck; install.packages("statcheck") covers more formats.
 # - A model quote that differs from the text by one character is DROPPED by
 #   the verifier (counted in attr(x, "counts")): strictness is the point.
 # - Results differ between runs: models are not deterministic. That is why

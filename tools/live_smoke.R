@@ -116,6 +116,52 @@ check("loop_groq_pass_reasoning", {
       budget(max_steps = 6))
 }, needs = "GROQ_API_KEY", summary = loop_summary)
 
+# gpt-6-luna answered 2 (run 1) and 1 (run 2) after the tool returned 11.
+# Diagnostics: (a) the model's reasoning summary for the final step, (b) the
+# tool output without the untrusted wrapper, (c) the Chat Completions API
+# instead of the Responses API. Three tries each; tiny cost.
+if (has("OPENAI_API_KEY")) {
+  q <- paste0("How many words are in: '", sentence, "'?")
+  check("diag_luna_reasoning", {
+    a <- make_counter("openai:gpt-6-luna")
+    tools <- researchAgentR:::.agent_tools(a)
+    msgs <- list(list(role = "system", content = researchAgentR:::.system_prompt(a)),
+                 list(role = "user", content = q))
+    out <- list()
+    for (step in 1:3) {
+      r <- chat(msgs, model = a$model, tools = tools, max_tokens = 2000,
+                reasoning = list(effort = "medium", summary = "detailed"))
+      out[[step]] <- list(calls = vapply(r$tool_calls, function(t) paste0(t$name, t$arguments_raw), ""),
+                          reasoning = r$reasoning, content = r$content)
+      if (!length(r$tool_calls)) break
+      msgs <- c(msgs, list(researchAgentR:::.assistant_message(r)))
+      done <- FALSE
+      for (tc in r$tool_calls) {
+        res <- call_tool(tc, tools)
+        msgs <- c(msgs, list(list(role = "tool", tool_call_id = tc$id, name = tc$name, content = res$output)))
+        if (tc$name == "final_answer") done <- TRUE
+      }
+      if (done) break
+    }
+    out
+  }, summary = function(x) paste(vapply(x, function(s) paste("CALLS:", paste(s$calls, collapse = ";"),
+                                                             "REASONING:", substr(s$reasoning, 1, 400)), ""),
+                                 collapse = " || "))
+  plain_tool <- define_tool(word_count, "Count the words in a text.",
+                            args = list(text = arg_string("The text to count")), untrusted = FALSE)
+  plain_counter <- agent("counter", "Use the word_count tool to count words. Never count by yourself.",
+    model = "openai:gpt-6-luna", tools = list(plain_tool),
+    output_schema = list(n_words = arg_integer("The number of words returned by the tool")))
+  register_provider("openai_chat", "https://api.openai.com/v1", api = "chat", key_env = "OPENAI_API_KEY")
+  for (k in 1:3) {
+    check(paste0("diag_luna_wrapped_", k), run(make_counter("openai:gpt-6-luna"), q, budget(max_steps = 6)),
+          summary = loop_summary)
+    check(paste0("diag_luna_plain_", k), run(plain_counter, q, budget(max_steps = 6)), summary = loop_summary)
+    check(paste0("diag_luna_chatapi_", k), run(make_counter("openai_chat:gpt-6-luna"), q, budget(max_steps = 6)),
+          summary = loop_summary)
+  }
+}
+
 # ---- 5. Provider built-in tools and remote MCP ---------------------------------
 check("groq_browser_search", chat("Find the DOI of the 2022 Psychometrika article on Dynamic Exploratory Graph Analysis by Golino and colleagues. Answer with the DOI only.",
       model = "groq:openai/gpt-oss-120b", tools = list(builtin_tool("browser_search")),
@@ -225,7 +271,7 @@ long <- paste(rep("Golino et al. (2022) proposed DynEGA (doi 10.1007/s11336-021-
 check("compress_text", compress_text(long, max_tokens = 80, model = "groq:openai/gpt-oss-20b"),
       needs = "GROQ_API_KEY", summary = function(x) paste(substr(x, 1, 200), "| lost:", paste(unlist(attr(x, "lost")), collapse = ",")))
 compact_agent <- scout
-compact_agent$context <- ctx_compact(trigger_tokens = 1500, keep_last = 2, model = "groq:openai/gpt-oss-20b")
+compact_agent$context <- ctx_compact(trigger_tokens = 800, keep_last = 2, model = "groq:openai/gpt-oss-20b")
 check("agent_ctx_compact", run(compact_agent, "Find two papers on exploratory graph analysis.", budget(max_steps = 8)),
       needs = "GROQ_API_KEY", summary = function(ep) paste(ep_summary(ep), "| context steps:",
         sum(vapply(ep$steps, function(s) s$type == "context", logical(1)))))
@@ -273,7 +319,13 @@ judge <- grader_judge("Pass if the answer names at least one real psychometric m
 check("grader_judge", judge("Exploratory graph analysis and factor analysis.", list(id = "t", instruction = "Name a method")),
       needs = "GROQ_API_KEY", summary = function(x) paste(x$pass, x$score, x$reason))
 check("cascade", cascade(c("groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b"),
-      verifier = function(answer, task) grepl("10\\.", paste(unlist(answer), collapse = " ")))(
+      # a real verifier: the DOI must exist AND match the title (verify_citations)
+      verifier = function(answer, task) {
+        txt <- paste(unlist(answer), collapse = " ")
+        doi <- normalize_doi(regmatches(txt, regexpr("10\\.[0-9]{4,}/\\S+", txt)))
+        length(doi) == 1 && !is.na(doi) && verify_citations(data.frame(doi = doi,
+          title = "Modeling latent topics in social media using dynamic exploratory graph analysis"))$status == "verified"
+      })(
       "Return the DOI of the 2022 Psychometrika article 'Modeling latent topics in social media using Dynamic Exploratory Graph Analysis'. Use your knowledge; answer with the DOI only."),
       needs = "GROQ_API_KEY", summary = function(x) paste(format(x), "| cost", format(attr(x, "cost"))))
 
