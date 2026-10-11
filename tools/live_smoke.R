@@ -97,12 +97,14 @@ counter_tool <- define_tool(word_count, "Count the words in a text.",
                             args = list(text = arg_string("The text to count")))
 sentence <- "Exploratory graph analysis estimates the number of dimensions in multivariate data"
 expected <- word_count(sentence)
+# Wording matters: with "Never count by yourself" and a field called n_words,
+# gpt-6-luna often counted the words of its OWN answer (see tools/diag_luna.R).
 make_counter <- function(m) agent("counter",
-  "Use the word_count tool to count words. Never count by yourself.",
+  "Count the words in the user's text with the word_count tool. Then call final_answer with the number the tool returned.",
   model = m, tools = list(counter_tool),
-  output_schema = list(n_words = arg_integer("The number of words returned by the tool")))
+  output_schema = list(count = arg_integer("The number that the word_count tool returned for the user's text")))
 loop_summary <- function(ep) paste(ep_summary(ep), "| correct =",
-                                   identical(as.integer(ep$answer$n_words), as.integer(expected)))
+                                   identical(as.integer(ep$answer$count), as.integer(expected)))
 for (i in seq_along(chat_models)) {
   m <- chat_models[[i]]
   check(paste0("loop_", m), run(make_counter(m), paste0("How many words are in: '", sentence, "'?"),
@@ -115,52 +117,6 @@ check("loop_groq_pass_reasoning", {
   run(make_counter("groq:openai/gpt-oss-120b"), paste0("How many words are in: '", sentence, "'?"),
       budget(max_steps = 6))
 }, needs = "GROQ_API_KEY", summary = loop_summary)
-
-# gpt-6-luna answered 2 (run 1) and 1 (run 2) after the tool returned 11.
-# Diagnostics: (a) the model's reasoning summary for the final step, (b) the
-# tool output without the untrusted wrapper, (c) the Chat Completions API
-# instead of the Responses API. Three tries each; tiny cost.
-if (has("OPENAI_API_KEY")) {
-  q <- paste0("How many words are in: '", sentence, "'?")
-  check("diag_luna_reasoning", {
-    a <- make_counter("openai:gpt-6-luna")
-    tools <- researchAgentR:::.agent_tools(a)
-    msgs <- list(list(role = "system", content = researchAgentR:::.system_prompt(a)),
-                 list(role = "user", content = q))
-    out <- list()
-    for (step in 1:3) {
-      r <- chat(msgs, model = a$model, tools = tools, max_tokens = 2000,
-                reasoning = list(effort = "medium", summary = "detailed"))
-      out[[step]] <- list(calls = vapply(r$tool_calls, function(t) paste0(t$name, t$arguments_raw), ""),
-                          reasoning = r$reasoning, content = r$content)
-      if (!length(r$tool_calls)) break
-      msgs <- c(msgs, list(researchAgentR:::.assistant_message(r)))
-      done <- FALSE
-      for (tc in r$tool_calls) {
-        res <- call_tool(tc, tools)
-        msgs <- c(msgs, list(list(role = "tool", tool_call_id = tc$id, name = tc$name, content = res$output)))
-        if (tc$name == "final_answer") done <- TRUE
-      }
-      if (done) break
-    }
-    out
-  }, summary = function(x) paste(vapply(x, function(s) paste("CALLS:", paste(s$calls, collapse = ";"),
-                                                             "REASONING:", substr(s$reasoning, 1, 400)), ""),
-                                 collapse = " || "))
-  plain_tool <- define_tool(word_count, "Count the words in a text.",
-                            args = list(text = arg_string("The text to count")), untrusted = FALSE)
-  plain_counter <- agent("counter", "Use the word_count tool to count words. Never count by yourself.",
-    model = "openai:gpt-6-luna", tools = list(plain_tool),
-    output_schema = list(n_words = arg_integer("The number of words returned by the tool")))
-  register_provider("openai_chat", "https://api.openai.com/v1", api = "chat", key_env = "OPENAI_API_KEY")
-  for (k in 1:3) {
-    check(paste0("diag_luna_wrapped_", k), run(make_counter("openai:gpt-6-luna"), q, budget(max_steps = 6)),
-          summary = loop_summary)
-    check(paste0("diag_luna_plain_", k), run(plain_counter, q, budget(max_steps = 6)), summary = loop_summary)
-    check(paste0("diag_luna_chatapi_", k), run(make_counter("openai_chat:gpt-6-luna"), q, budget(max_steps = 6)),
-          summary = loop_summary)
-  }
-}
 
 # ---- 5. Provider built-in tools and remote MCP ---------------------------------
 check("groq_browser_search", chat("Find the DOI of the 2022 Psychometrika article on Dynamic Exploratory Graph Analysis by Golino and colleagues. Answer with the DOI only.",

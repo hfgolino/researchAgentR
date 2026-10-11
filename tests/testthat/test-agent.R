@@ -24,3 +24,10 @@ test_that("local models cost zero and twin providers share prices", {
   expect_equal(researchAgentR:::.cost(parse_model("groq_responses_test:openai/gpt-oss-120b"), u),
                researchAgentR:::.cost(parse_model("groq:openai/gpt-oss-120b"), u))
 })
+
+test_that("an early final_answer is refused with an explanation", {
+  r <- researchAgentR:::.early_final(list(id = "c1", name = "final_answer"))
+  expect_true(r$is_error)
+  expect_match(r$output, "same turn as other tools")
+  expect_equal(researchAgentR:::.plain("\033[38;5;232mHTTP 400\033[0m"), "HTTP 400")
+})

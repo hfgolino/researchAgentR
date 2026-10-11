@@ -127,7 +127,7 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
            effort = agent$effort),
       error = function(e) e)
     if (inherits(reply, "error")) {
-      if (!.invalid_tool_call(reply)) return(.finish(ep, messages, paste("api_error:", conditionMessage(reply))))
+      if (!.invalid_tool_call(reply)) return(.finish(ep, messages, paste("api_error:", .plain(conditionMessage(reply)))))
       # The provider rejected a malformed tool call (for example a tool that
       # does not exist): count it as a tool error and let the model retry.
       ep <- .record_invalid_call(ep, reply, verbose)
@@ -144,8 +144,11 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
         "Give your final answer by calling the final_answer tool, not as plain text.")))
       next
     }
+    # final_answer counts only when called alone: called together with other
+    # tools, it was written before their results were known.
+    early <- length(reply$tool_calls) > 1
     for (tc in reply$tool_calls) {
-      res <- call_tool(tc, tools)
+      res <- if (early && tc$name == "final_answer") .early_final(tc) else call_tool(tc, tools)
       ep <- .record_tool(ep, tc, res, verbose)
       messages <- c(messages, list(list(role = "tool", tool_call_id = tc$id, name = tc$name,
                                         content = res$output, is_error = res$is_error)))
@@ -244,7 +247,7 @@ print.context_strategy <- function(x, ...) {
 }
 
 .error_line <- function(e) {
-  lines <- strsplit(conditionMessage(e), "\n")[[1]]
+  lines <- strsplit(.plain(conditionMessage(e)), "\n")[[1]]
   lines <- trimws(sub("^\\W+", "", lines, perl = TRUE))
   paste(.shorten(lines[nzchar(lines)][-1], 300), collapse = " ")
 }
@@ -258,3 +261,13 @@ print.context_strategy <- function(x, ...) {
   if (verbose) .print_step(step)
   ep
 }
+
+.early_final <- function(tc) {
+  list(id = tc$id, name = tc$name, is_error = TRUE, value = NULL, truncated = FALSE, cost = 0,
+       latency = 0, output = paste(
+         "final_answer was not accepted: it was called in the same turn as other tools,",
+         "before their results were known. Read those results, then call final_answer alone."))
+}
+
+# Error messages from httr2/cli may carry terminal colour codes; logs keep plain text.
+.plain <- function(x) gsub("\033\\[[0-9;]*m", "", x)
