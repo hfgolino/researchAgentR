@@ -50,8 +50,10 @@ for (v in names(variants)) {
     episodes[[id]] <- ep
     bodies[[id]] <- researchAgentR:::.pkg_env$last_body
     ans <- suppressWarnings(as.integer(ep$answer$n_words))
-    rows[[id]] <- data.frame(variant = v, try = k, answer = ans, correct = identical(ans, 11L),
-                             stop = ep$stop_reason)
+    if (length(ans) != 1) ans <- NA_integer_   # no final answer (for example an API error)
+    rows[[id]] <- data.frame(variant = v, try = k, answer = ans, correct = isTRUE(ans == 11L),
+                             stop = substr(ep$stop_reason, 1, 200))
+    write.csv(do.call(rbind, rows), file.path(out_dir, "diag.csv"), row.names = FALSE)
     cat(sprintf("%-20s try %d: answer %s (%s)\n", v, k, ans, ep$stop_reason))
   }
   options(old)
@@ -81,7 +83,7 @@ for (step in 1:3) {
 }
 
 res <- do.call(rbind, rows)
-print(aggregate(correct ~ variant, res, function(x) paste0(sum(x), "/", length(x))))
+print(aggregate(correct ~ variant, res, function(x) paste0(sum(x, na.rm = TRUE), "/", length(x))))
 write.csv(res, file.path(out_dir, "diag.csv"), row.names = FALSE)
 saveRDS(episodes, file.path(out_dir, "episodes.rds"))
 saveRDS(list(bodies = bodies, summary_steps = summary_steps), file.path(out_dir, "bodies.rds"))
