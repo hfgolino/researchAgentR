@@ -19,6 +19,14 @@ if (!file.exists("researchAgentR/DESCRIPTION")) {
        "contains run_live_tests.R and the researchAgentR folder).")
 }
 
+# Reinstalling a package while it is loaded corrupts it for this R session
+# ("lazy-load database ... is corrupt"), so the runner needs a fresh session.
+if ("researchAgentR" %in% loadedNamespaces()) {
+  stop("researchAgentR is already loaded in this R session. Restart R first ",
+       "(RStudio: Session > Restart R, or Cmd/Ctrl + Shift + F10), then run ",
+       "source(\"run_live_tests.R\") again.", call. = FALSE)
+}
+
 readRenviron("~/.Renviron")   # pick up keys added since R started
 
 needed <- c("httr2", "jsonlite", "testthat", "withr", "callr", "processx",
