@@ -1,0 +1,128 @@
+# Offline tests: request building, input checks, parsers and tool schemas.
+# Parsers are tested on small fragments whose field names come from the
+# official documentation (URLs in each test). Live tests query the real APIs
+# (no keys needed) and are skipped without a network.
+
+test_that("NIH criteria follow the RePORTER v2 field names", {
+  # https://api.reporter.nih.gov/ (Project search parameters)
+  cr <- .nih_criteria("loneliness aging", fiscal_years = 2024:2025, agencies = c("nia", "nimh"),
+                      pi_names = "Golino")
+  expect_equal(cr$advanced_text_search$operator, "and")
+  expect_equal(cr$advanced_text_search$search_text, "loneliness aging")
+  expect_equal(cr$fiscal_years, list(2024L, 2025L))
+  expect_equal(cr$agencies, list("NIA", "NIMH"))
+  expect_equal(cr$pi_names, list(list(any_name = "Golino")))
+  json <- as.character(.to_json(list(criteria = .nih_criteria(fiscal_years = 2025))))
+  expect_equal(json, "{\"criteria\":{\"fiscal_years\":[2025]}}")   # a one-year array, not a scalar
+  extra <- .nih_criteria("x", org_names = list("UNIVERSITY OF VIRGINIA"))
+  expect_equal(extra$org_names, list("UNIVERSITY OF VIRGINIA"))
+  expect_length(.nih_criteria(), 0)
+})
+
+test_that("NIH searches check their inputs before any request", {
+  expect_error(search_nih_projects(), "at least one")
+  expect_error(search_nih_projects("x", n = 501), "between 1 and 500")
+  expect_error(search_nih_projects("x", offset = 15000), "14,999")
+})
+
+test_that("an NIH project record becomes one row", {
+  # Field names from "Data Elements for RePORTER Project API V2":
+  # https://api.reporter.nih.gov/documents/Data%20Elements%20for%20RePORTER%20Project%20API_V2.pdf
+  p <- list(appl_id = 1, project_num = "R01AG000001-01", project_title = "A title",
+            contact_pi_name = "DOE, JANE", organization = list(org_name = "SOME UNIVERSITY"),
+            fiscal_year = 2025, award_amount = 456789,
+            agency_ic_admin = list(abbreviation = "NIA", name = "National Institute on Aging"),
+            project_start_date = "2025-09-01T00:00:00Z", project_end_date = "2030-08-31T00:00:00Z",
+            abstract_text = "An abstract.")
+  r <- .nih_row(p)
+  expect_equal(r$project_num, "R01AG000001-01")
+  expect_equal(r$organization, "SOME UNIVERSITY")
+  expect_equal(r$agency, "NIA")
+  expect_equal(r$start_date, "2025-09-01")
+  expect_equal(r$award_amount, 456789)
+  expect_equal(r$url, "https://reporter.nih.gov/project-details/1")
+  # Missing fields become NA, never an error.
+  empty <- .nih_row(list())
+  expect_true(all(is.na(empty$title), is.na(empty$award_amount), is.na(empty$url)))
+  expect_equal(names(empty), names(.empty_nih()))
+})
+
+test_that("NSF dates are converted to mm/dd/yyyy", {
+  expect_equal(.nsf_date("2025-01-31"), "01/31/2025")
+  expect_equal(.nsf_date(as.Date("2024-12-01")), "12/01/2024")
+  expect_equal(.nsf_date("03/15/2023"), "03/15/2023")
+  expect_null(.nsf_date(NULL))
+  expect_error(.nsf_date("last year"), "Dates must look like")
+  expect_error(search_nsf_awards(""), "non-empty")
+})
+
+test_that("an NSF award becomes one row", {
+  # printFields names from https://resources.research.gov/common/webapi/awardapisearch-v1.htm
+  a <- list(id = "2400001", title = "A title", pdPIName = "Jane Doe", awardeeName = "Some University",
+            agency = "NSF", startDate = "09/01/2024", expDate = "08/31/2027",
+            fundsObligatedAmt = "350000")
+  r <- .nsf_row(a)
+  expect_equal(r$amount, 350000)
+  expect_equal(r$url, "https://www.nsf.gov/awardsearch/showAward?AWD_ID=2400001")
+  expect_true(is.na(r$abstract))
+})
+
+test_that("Grants.gov errors are reported, successes pass", {
+  # Response envelope from https://www.grants.gov/api/common/search2
+  expect_silent(.grants_check(list(errorcode = 0, msg = "Webservice Succeeds")))
+  expect_error(.grants_check(list(errorcode = 1, msg = "Bad request")), "Bad request")
+  expect_error(search_grants_gov("x", status = "open"), "should be one of")
+})
+
+test_that("funding tools have the expected schemas", {
+  nih <- tool_nih_reporter(n = 5, agencies = "NIA")
+  expect_equal(nih$name, "nih_reporter")
+  expect_equal(nih$schema$required, list("text"))
+  expect_equal(nih$schema$properties$years$items$type, "integer")
+  expect_true(nih$untrusted)
+  nsf <- tool_nsf_awards()
+  expect_equal(nsf$schema$required, list("keyword"))
+  gg <- tool_grants_gov()
+  expect_length(gg$schema$required, 0)
+  out <- call_tool("grants_gov", list(gg), list())
+  expect_true(out$is_error)
+  expect_match(out$output, "keyword or an opportunity_id")
+})
+
+test_that("tool text is short and the data frame is kept", {
+  res <- .empty_nih()
+  attr(res, "total") <- 0
+  v <- .format_nih(res)
+  expect_match(v, "No matching projects")
+  expect_s3_class(attr(v, "data"), "data.frame")
+})
+
+# ---- Live tests ------------------------------------------------------------
+
+test_that("NIH RePORTER search works (live)", {
+  skip_on_cran()
+  skip_if_offline("api.reporter.nih.gov")
+  res <- search_nih_projects("exploratory graph analysis", n = 5)
+  expect_true(all(c("project_num", "title", "award_amount", "url") %in% names(res)))
+  expect_lte(nrow(res), 5)
+  expect_false(is.na(attr(res, "total")))
+})
+
+test_that("NSF award search works (live)", {
+  skip_on_cran()
+  skip_if_offline("api.nsf.gov")
+  res <- search_nsf_awards("psychometrics", n = 3)
+  expect_lte(nrow(res), 3)
+  expect_true(all(c("id", "title", "amount") %in% names(res)))
+})
+
+test_that("Grants.gov search and fetch work (live)", {
+  skip_on_cran()
+  skip_if_offline("api.grants.gov")
+  res <- search_grants_gov("health", n = 3)
+  expect_lte(nrow(res), 3)
+  skip_if(nrow(res) == 0)
+  d <- grants_gov_opportunity(res$id[1])
+  expect_equal(nrow(d), 1)
+  expect_false(is.na(d$title))
+})
