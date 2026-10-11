@@ -5,7 +5,7 @@
 \alias{read_episode}
 \title{Save and read episodes}
 \usage{
-save_episode(episode, file = NULL, dir = "episodes")
+save_episode(episode, file = NULL, dir = "episodes", children = TRUE)
 
 read_episode(file)
 }
@@ -15,6 +15,10 @@ read_episode(file)
 \item{file}{Path of the JSON file. Defaults to \verb{<id>.json} in \code{dir}.}
 
 \item{dir}{Folder for episodes.}
+
+\item{children}{Also save the episodes of agents that ran as tools of this
+one (\code{\link[=team]{team()}}, \code{\link[=as_tool]{as_tool()}}), inside the same file. \code{\link[=read_episode]{read_episode()}}
+makes them available again through \code{\link[=sub_episodes]{sub_episodes()}}.}
 }
 \value{
 \code{save_episode()} returns the file path, invisibly; \code{read_episode()}

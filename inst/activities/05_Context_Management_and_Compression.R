@@ -172,6 +172,47 @@ cat(notes_view[[3]]$content)
 # EXPECTED OUTPUT: system, user, the notes (with the DOI), a note about the
 # removed messages, and only the last assistant/tool pair.
 
+# The notes live OUTSIDE the context window, in a Markdown file. The agent
+# reaches them through two tools made by notes_tools(): note_write (append a
+# dated note, optionally under a heading) and note_read (read all notes).
+# ctx_notes() creates them for you (toy_notes$tools); here they are called by
+# hand, exactly as the agent loop would call them, so nothing is sent anywhere.
+agent_notes_file <- tempfile(fileext = ".md")
+note_tools <- notes_tools(agent_notes_file)
+note_tools
+# EXPECTED OUTPUT (computed offline): two <agent_tool> objects. note_write
+# takes text (string) and section (string, optional); note_read takes no
+# arguments and is flagged "output untrusted" (a notes file can be edited
+# by people, so its content is treated as data).
+
+call_tool("note_read", note_tools)$output
+call_tool("note_write", note_tools,
+          arguments = list(text = "EGA (2017), PLoS ONE: doi 10.1371/journal.pone.0174035",
+                           section = "Sources"))$output
+call_tool("note_write", note_tools,
+          arguments = list(text = "Still missing: the DOI of the DynEGA article (Psychometrika, 2022)."))$output
+cat(call_tool("note_read", note_tools)$output, "\n")
+# EXPECTED OUTPUT (computed offline): "(no notes yet)" wrapped in
+# <tool_output tool="note_read" trust="untrusted"> tags; then "Note saved."
+# twice; then the file, wrapped the same way, with a dated "## Sources"
+# entry holding the DOI and a dated "## Note" entry with the open question.
+
+# A malformed call is an error the model can fix, never a crash:
+call_tool("note_write", note_tools, arguments = list(section = "Sources"))$output
+# EXPECTED OUTPUT (computed offline): "Error: invalid arguments for
+# note_write: 'text' is required. Call the tool again with corrected arguments."
+
+# The same two tools work with ANY context strategy. With a sliding window,
+# old tool results are dropped, but the agent can still read its notes on
+# demand (ctx_notes() differs only in also SHOWING the notes at every step):
+window_scout_with_notes <- agent("scout_notes", "You find scholarly articles.",
+  model = SCOUT_MODEL, tools = c(list(tool_openalex(n = 10)), notes_tools(agent_notes_file)),
+  context = ctx_window(keep_last = 2))
+window_scout_with_notes
+# EXPECTED OUTPUT (computed offline): <agent> scout_notes |
+# groq:openai/gpt-oss-20b, tools search_openalex, note_write, note_read, and
+# "Context: window(2)". Nothing runs until run() is called.
+
 sent_by <- function(strategy) {
   vapply(call_ends, function(k) tokens_sent(strategy$prepare(toy[1:k], NULL)), numeric(1))
 }

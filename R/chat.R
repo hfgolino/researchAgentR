@@ -69,6 +69,11 @@ chat <- function(messages, model = default_model("lead"), system = NULL, tools =
   res$model <- m$id
   res$provider <- m$provider
   res$cost <- if (isTRUE(res$cached)) 0 else .cost(m, res$usage)
+  # running total of model spending in this R session (unknown prices count
+  # as unpriced calls), read with researchAgentR:::.session_spend()
+  .pkg_env$spend <- (.pkg_env$spend %||% 0) + (if (is.na(res$cost)) 0 else res$cost)
+  if (is.na(res$cost)) .pkg_env$unpriced <- (.pkg_env$unpriced %||% 0) + 1
+  if (!isTRUE(res$cached)) .pkg_env$live_calls <- (.pkg_env$live_calls %||% 0) + 1
   class(res) <- "llm_response"
   res
 }
@@ -176,4 +181,9 @@ print.llm_response <- function(x, ...) {
     max_tokens_field = if (new_name) "max_completion_tokens" else "max_tokens",
     send_reasoning = isTRUE(.opt(paste0("pass_reasoning.", provider), FALSE))
   )
+}
+
+.session_spend <- function() {
+  list(cost = .pkg_env$spend %||% 0, unpriced_calls = .pkg_env$unpriced %||% 0,
+       live_calls = .pkg_env$live_calls %||% 0)
 }

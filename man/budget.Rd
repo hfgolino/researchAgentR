@@ -18,7 +18,11 @@ budget(
 \item{max_tokens}{Maximum billed tokens (input, cached input and output
 summed over all calls).}
 
-\item{max_cost}{Maximum cost in US dollars at list price.}
+\item{max_cost}{Maximum cost in US dollars at list price. Token prices
+come from \code{\link[=model_registry]{model_registry()}}. Provider-side tools such as Groq's
+\code{browser_search} may also charge per call; such fees are counted only
+when set with, for example, \code{options(researchAgentR.builtin_fees = c(browser_search = 0.005))} (US$ per call, from the provider's current
+price list; the number here is only an example).}
 
 \item{max_seconds}{Maximum wall-clock time.}
 

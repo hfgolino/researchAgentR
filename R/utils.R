@@ -81,3 +81,39 @@ count_tokens <- function(x) {
   }
   as.character(.to_json(x, pretty = TRUE))
 }
+
+# ---- Subsetting the package's data-frame classes ---------------------------------
+# A row subset (results[results$pass, ]) keeps the class and the attributes
+# that its print method needs; a column subset (results[, c("id", "pass")])
+# becomes a plain data frame, because the special print method needs columns
+# that are no longer there.
+.subset_keep <- function(x, out) {
+  if (!is.data.frame(out)) return(out)
+  if (all(names(x) %in% names(out))) {
+    extra <- setdiff(names(attributes(x)), c("names", "row.names", "class"))
+    for (a in extra) attr(out, a) <- attr(x, a)
+    class(out) <- class(x)
+  } else {
+    class(out) <- "data.frame"
+  }
+  out
+}
+
+#' @export
+`[.task_set` <- function(x, ...) .subset_keep(x, NextMethod())
+#' @export
+`[.eval_results` <- function(x, ...) .subset_keep(x, NextMethod())
+#' @export
+`[.manuscript_review` <- function(x, ...) .subset_keep(x, NextMethod())
+#' @export
+`[.skill_check` <- function(x, ...) .subset_keep(x, NextMethod())
+#' @export
+`[.skill_test` <- function(x, ...) .subset_keep(x, NextMethod())
+#' @export
+`[.style_profile` <- function(x, ...) .subset_keep(x, NextMethod())
+#' @export
+`[.cost_ledger` <- function(x, ...) .subset_keep(x, NextMethod())
+#' @export
+`[.citation_check` <- function(x, ...) .subset_keep(x, NextMethod())
+#' @export
+`[.lit_records` <- function(x, ...) .subset_keep(x, NextMethod())

@@ -611,7 +611,9 @@ plot_frontier <- function(..., log_cost = FALSE) {
 #' A browsing agent can "solve" a benchmark by finding its answer key: the
 #' benchmark's repository, a page that lists the answers, or the exact
 #' expected answer in a search result. This function searches every tool
-#' call (arguments) and tool result in an episode for such strings. A hit is
+#' call (arguments) and tool result in an episode for such strings, including
+#' what provider-side tools returned (Groq `browser_search`, OpenAI
+#' `web_search`, remote MCP), which the episode keeps with the model step. A hit is
 #' a reason to read the trajectory, not automatic proof of cheating (a DOI
 #' task's answer will legitimately appear in a Crossref result).
 #'
@@ -623,7 +625,7 @@ plot_frontier <- function(..., log_cost = FALSE) {
 #'   answers are added to `patterns`. Hashed answers are matched by hashing
 #'   every DOI found in the tool outputs.
 #' @return A data frame with one row per hit: `episode_id`, `step`, `where`
-#'   (`"tool_call"` or `"tool_result"`), `tool`, `pattern`, `context` (the
+#'   (`"tool_call"`, `"tool_result"` or `"builtin_result"`), `tool`, `pattern`, `context` (the
 #'   text around the hit). Zero rows means no hit.
 #' @examples
 #' # A hand-built episode-like list (not a real run).
@@ -645,9 +647,13 @@ contamination_check <- function(episode, patterns = character(0), task = NULL) {
   patterns <- unique(patterns[nzchar(patterns)])
   hits <- list()
   for (ep in episode) {
-    for (s in Filter(function(s) identical(s$type, "tool"), ep$steps)) {
-      for (where in c("tool_call", "tool_result")) {
-        text <- as.character(if (where == "tool_call") s$arguments %||% "" else s$result %||% "")
+    # tool steps, and model steps whose provider ran tools (browser_search ...)
+    for (s in Filter(function(s) identical(s$type, "tool") || length(s$builtin_outputs), ep$steps)) {
+      wheres <- if (identical(s$type, "tool")) c("tool_call", "tool_result") else "builtin_result"
+      for (where in wheres) {
+        text <- as.character(switch(where, tool_call = s$arguments %||% "", tool_result = s$result %||% "",
+                                    paste(unlist(s$builtin_outputs), collapse = "\n")))
+        if (where == "builtin_result") s$tool <- paste(unique(unlist(s$executed_tools)), collapse = ", ")
         if (!length(text) || !nzchar(text)) next
         for (p in patterns) {
           pos <- regexpr(tolower(p), tolower(text), fixed = TRUE)

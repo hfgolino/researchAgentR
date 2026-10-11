@@ -452,10 +452,23 @@ print.style_distance <- function(x, ...) {
 # Representative paragraphs: the most central ones in embedding space (the
 # closest to the mean embedding) when embed_texts() is available and works;
 # otherwise the ones whose length is closest to the median length.
+# Is the default embedding model usable right now? A quick check avoids
+# waiting on retries when Ollama is not running or the model is not pulled.
+.embed_available <- function(model = default_model("embed")) {
+  m <- tryCatch(parse_model(model), error = function(e) NULL)
+  if (is.null(m)) return(FALSE)
+  if (m$provider == "ollama") {
+    pulled <- tryCatch(sub(":latest$", "", ollama_status()$name), error = function(e) character(0))
+    return(sub(":latest$", "", m$model) %in% pulled)
+  }
+  if (m$provider == "hf") return(TRUE)
+  nzchar(.get_key(m$provider))
+}
+
 .pick_exemplars <- function(docs, n) {
   n <- min(n, nrow(docs))
   embed <- .lazy_fn("embed_texts")
-  if (!is.null(embed)) {
+  if (!is.null(embed) && .embed_available()) {
     E <- tryCatch(embed(docs$text), error = function(e) NULL)
     if (is.matrix(E) && nrow(E) == nrow(docs)) {
       centroid <- colMeans(E)

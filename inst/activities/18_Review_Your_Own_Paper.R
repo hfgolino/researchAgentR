@@ -101,9 +101,9 @@ attr(checks, "notes")
 # hits (em dashes and "we"/"our"), each with the exact sentence quoted; they
 # follow YOUR rules, so a rule you do not hold should be removed (Step 2).
 # Every row says how it was found, in the rationale column.
-# as.data.frame() before subsetting: the print method of a review needs its
-# attributes, which a subset drops.
-as.data.frame(checks)[checks$severity == "high", c("id", "quote", "suggestion")]
+# Selecting rows keeps the review view; selecting columns gives a plain data frame.
+checks[checks$severity == "high", ]
+checks[checks$severity == "high", c("id", "quote", "suggestion")]
 
 # The online DOI check (needs the network; verify_citations() from the
 # verification module looks up every DOI written in the text):

@@ -46,7 +46,10 @@
 #' Queries and documents must be embedded with the **same model**. Some
 #' models embed queries and documents differently (`input_type`): use
 #' `"document"` for the texts you store and `"query"` for search queries.
-#' Ollama, OpenAI and sentence-transformers ignore `input_type`.
+#' OpenAI and sentence-transformers ignore `input_type`; for Ollama's
+#' `nomic-embed-text` it adds the prefixes the model was trained with
+#' (`"search_query: "`, `"search_document: "`). A vector store built with one
+#' setting should be searched with the same setting.
 #'
 #' Empty texts, and texts in a batch whose request failed, get a row of
 #' `NA`; they are counted in a warning and listed in the attribute
@@ -181,6 +184,12 @@ embed_texts <- function(texts, model = default_model("embed"), batch_size = 64,
 
 .embed_ollama <- function(texts, model, input_type, dimensions) {
   host <- sub("/v1/?$", "", .provider_info("ollama")$base_url)
+  # nomic-embed-text was trained with task prefixes, which Ollama does not add
+  # (https://huggingface.co/nomic-ai/nomic-embed-text-v1.5)
+  if (grepl("^nomic-embed-text", model) && !is.null(input_type)) {
+    prefix <- switch(input_type, query = "search_query: ", document = "search_document: ", "")
+    texts <- paste0(prefix, texts)
+  }
   body <- list(model = model, input = as.list(texts))
   if (!is.null(dimensions)) body$dimensions <- as.integer(dimensions)
   r <- .perform(.request(paste0(host, "/api/embed"), body = body, auth = "none"))

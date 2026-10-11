@@ -176,7 +176,11 @@ baselines <- function(make_agent, tasks,
 #' @param note A short note recorded in every row (for example "prompt v2
 #'   tuning").
 #' @return A data frame of class `cost_ledger` with `kind`, `note`, `id`,
-#'   `model`, `tokens`, `cost`, `grading_cost`, `seconds`.
+#'   `model`, `tokens`, `cost`, `grading_cost`, `seconds` and
+#'   `within_parent`. Episodes of agents that ran as tools of a lead
+#'   ([team()], [as_tool()]) are added as their own rows; their cost is
+#'   already inside the lead's cost (its tool step), so `within_parent = TRUE`
+#'   rows are shown but not added again to the printed total.
 #' @examples
 #' # Hand-made results (not model output) from a tuning session.
 #' tuning <- data.frame(solver = "v2", task_id = c("a", "b"), trial = 1, pass = c(TRUE, FALSE),
@@ -193,10 +197,15 @@ cost_ledger <- function(episodes, kind = c("runtime", "offline"), note = "") {
                     grading_cost = episodes$grading_cost %||% 0,
                     seconds = episodes$seconds %||% NA_real_, stringsAsFactors = FALSE)
   } else {
-    e <- episodes_df(episodes)
+    eps <- .lens_episodes(episodes)
+    eps <- .with_children(eps)   # a team's workers get their own rows
+    e <- episodes_df(unclass(eps))
     d <- data.frame(id = e$id, model = e$model, tokens = e$tokens, cost = e$cost,
-                    grading_cost = 0, seconds = e$seconds, stringsAsFactors = FALSE)
+                    grading_cost = 0, seconds = e$seconds,
+                    # a worker's cost is already in its lead's row: shown, not added again
+                    within_parent = attr(eps, "nested"), stringsAsFactors = FALSE)
   }
+  if (is.null(d$within_parent)) d$within_parent <- FALSE
   d <- cbind(kind = kind, note = note, d, stringsAsFactors = FALSE)
   class(d) <- c("cost_ledger", "data.frame")
   d
@@ -208,9 +217,11 @@ print.cost_ledger <- function(x, ...) {
   for (k in c("runtime", "offline")) {
     d <- x[x$kind == k, , drop = FALSE]
     if (!nrow(d)) next
-    cat(sprintf("%-8s %4d rows | model cost $%.5f | grading $%.5f | %s tokens%s\n", k, nrow(d),
-                sum(d$cost), sum(d$grading_cost), format(sum(d$tokens), big.mark = ","),
-                if (anyNA(d$cost)) " | some costs unknown (NA)" else ""))
+    counted <- !d$within_parent
+    cat(sprintf("%-8s %4d rows | model cost $%.5f | grading $%.5f | %s tokens%s%s\n", k, nrow(d),
+                sum(d$cost[counted]), sum(d$grading_cost), format(sum(d$tokens), big.mark = ","),
+                if (anyNA(d$cost[counted])) " | some costs unknown (NA)" else "",
+                if (any(!counted)) sprintf(" | %d worker row(s) already inside a lead's cost", sum(!counted)) else ""))
   }
   cat("Report runtime and offline totals separately.\n")
   invisible(x)

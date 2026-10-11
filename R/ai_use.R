@@ -43,12 +43,15 @@ utils::globalVariables(".data")
 
 # Everything the statement says, computed from the episodes in one place.
 .ai_use_facts <- function(eps) {
+  eps <- .with_children(eps)     # workers of a team are described too
+  nested <- attr(eps, "nested")  # ... but their cost is already in the lead's
+  eps <- lapply(eps, .lens_episode)
   steps <- unlist(lapply(eps, `[[`, "steps"), recursive = FALSE)
   model_steps <- Filter(function(s) s$type == "model", steps)
   tool_steps <- Filter(function(s) s$type == "tool", steps)
   totals <- lapply(eps, .totals)
   sum_t <- function(f) sum(vapply(totals, function(t) as.numeric(t[[f]]), numeric(1)))
-  costs <- vapply(totals, function(t) t$cost, numeric(1))
+  costs <- vapply(totals, function(t) t$cost, numeric(1))[!nested]
 
   step_models <- vapply(model_steps, `[[`, character(1), "model")
   step_models[!nzchar(step_models)] <- "(model not recorded)"

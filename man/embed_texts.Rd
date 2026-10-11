@@ -54,7 +54,10 @@ confidential documents or participant data.
 Queries and documents must be embedded with the \strong{same model}. Some
 models embed queries and documents differently (\code{input_type}): use
 \code{"document"} for the texts you store and \code{"query"} for search queries.
-Ollama, OpenAI and sentence-transformers ignore \code{input_type}.
+OpenAI and sentence-transformers ignore \code{input_type}; for Ollama's
+\code{nomic-embed-text} it adds the prefixes the model was trained with
+(\code{"search_query: "}, \code{"search_document: "}). A vector store built with one
+setting should be searched with the same setting.
 
 Empty texts, and texts in a batch whose request failed, get a row of
 \code{NA}; they are counted in a warning and listed in the attribute

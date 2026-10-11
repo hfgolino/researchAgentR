@@ -242,8 +242,8 @@ writeLines(x, broken_md)
 chk <- validate_skill(file.path(broken_dir, "summarizing-methods"))
 chk
 attr(chk, "valid")
-# as.data.frame() first: the print method of a skill_check needs all columns.
-as.data.frame(chk)[chk$ok %in% FALSE, c("rule", "level", "detail")]
+# Choosing columns gives a plain data frame (the skill_check view needs all columns).
+chk[chk$ok %in% FALSE, c("rule", "level", "detail")]
 
 # EXPECTED OUTPUT (computed offline): "NOT a valid skill: fix the FAIL [req]
 # rows. 1 recommendation(s) not met."; attr(chk, "valid") is FALSE; three

@@ -63,7 +63,7 @@ Rules:
 | 12_Screening_Assistant.R | self-study | classify_texts, tool_classify, select_relevant, route, calibrate_judge |
 | 13_Data_Agent.R | self-study | define_tool (an open-data API), run_r_code, tool_run_r |
 | 14_Capstone_Team_Brief.R | self-study | team, as_tool, verify_citations, check_claims, ai_use_statement, course_template, cost_ledger, view_episodes |
-| 15_Embeddings_for_Agents.R | self-study | embed_texts, cosine_similarity, route, minilm_embeddings |
+| 15_Embeddings_for_Agents.R | self-study | embed_texts, cosine_similarity, route (embedding and llm), minilm_embeddings, label_descriptions, set_jina_key, set_voyage_key |
 | 16_Create_Your_Own_Skills.R | self-study | create_skill, validate_skill, test_skill, use_skills, list_skills |
 | 17_Learn_Your_Writing_Style.R | self-study | read_documents, style_profile, learn_style, style_to_skill, write_in_style, style_distance |
 | 18_Review_Your_Own_Paper.R | self-study | review_checks, review_manuscript, review_report, apply_revisions |

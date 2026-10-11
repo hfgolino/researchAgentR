@@ -124,3 +124,12 @@ test_that("read_page reads a real page (live)", {
   expect_equal(nrow(p), 1)
   expect_match(p$text, "EGAnet")
 })
+
+test_that("both HTML engines decode named and numeric entities alike", {
+  h <- "<html><title>A &amp; B</title><body><p>Caf&eacute; &#233; &alpha; = .91 &le; 1 &amp;lt;</p></body></html>"
+  a <- html_to_text(h, engine = "regex")
+  expect_equal(as.character(a), "Café é α = .91 ≤ 1 &lt;")
+  expect_equal(attr(a, "title"), "A & B")
+  skip_if_not_installed("xml2")
+  expect_equal(as.character(html_to_text(h, engine = "xml2")), as.character(a))
+})

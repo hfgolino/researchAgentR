@@ -28,9 +28,25 @@
     content = reply$content %||% "", reasoning = .shorten(reply$reasoning %||% "", 2000),
     tool_calls = vapply(reply$tool_calls, function(tc) paste0(tc$name, "(", tc$arguments_raw, ")"), character(1)),
     executed_tools = vapply(reply$executed_tools, function(x) as.character(x$type %||% x$name %||% "builtin"), character(1)),
+    # what provider-side tools (browser_search, web_search, remote MCP) searched
+    # and returned, so a run can be checked for contamination afterwards
+    builtin_outputs = vapply(reply$executed_tools, function(x) {
+      txt <- paste(c(.as_text(x$arguments %||% x$action %||% ""), .as_text(x$output %||% "")), collapse = "\n")
+      substr(txt, 1, .opt("log_chars", 4000))
+    }, character(1)),
     stop_reason = reply$stop_reason %||% "", notes = reply$notes %||% character(0),
     rate_limits = reply$headers %||% list()
   )
+  # Provider-side tools may carry a fee per call that the token price does not
+  # include. Fees are counted only when set, in US$ per call, for example
+  # options(researchAgentR.builtin_fees = c(browser_search = 0.005)), from the
+  # provider's current price list.
+  fees <- .opt("builtin_fees", NULL)
+  if (length(step$executed_tools) && !is.null(fees)) {
+    fee <- sum(fees[step$executed_tools], na.rm = TRUE)
+    step$builtin_fee <- fee
+    step$cost <- step$cost + fee
+  }
   ep$steps[[length(ep$steps) + 1]] <- step
   if (verbose) .print_step(step)
   ep
@@ -106,6 +122,10 @@ print.episode <- function(x, ...) {
   cat(sprintf("Tokens: %s billed (%s cached), peak context ~%s | cost $%.5f | %.1f s\n",
               format(t$tokens, big.mark = ","), format(t$cache_read, big.mark = ","),
               format(t$peak_context, big.mark = ","), t$cost, t$seconds))
+  n_builtin <- sum(vapply(x$steps, function(s) length(s$executed_tools %||% character(0)), numeric(1)))
+  if (n_builtin && is.null(.opt("builtin_fees", NULL))) {
+    cat(sprintf("Provider-side tool calls: %d (any per-call fee is not in the cost; see ?budget)\n", n_builtin))
+  }
   cat("Answer:", if (is.null(x$answer)) "(none)" else .shorten(.as_text(x$answer), 400), "\n")
   invisible(x)
 }
@@ -133,7 +153,12 @@ episode_steps <- function(episode) {
     is_error = isTRUE(s$is_error), cached = isTRUE(s$cached),
     detail = .shorten(if (s$type == "model") c(unlist(s$tool_calls), s$content) else s$result, 120),
     stringsAsFactors = FALSE))
-  if (!length(rows)) return(data.frame())
+  if (!length(rows)) {
+    return(data.frame(step = integer(0), type = character(0), name = character(0), input = numeric(0),
+                      cache_read = numeric(0), cache_write = numeric(0), output = numeric(0),
+                      context_tokens = numeric(0), cost = numeric(0), latency = numeric(0),
+                      is_error = logical(0), cached = logical(0), detail = character(0)))
+  }
   do.call(rbind, rows)
 }
 
@@ -163,6 +188,9 @@ episodes_df <- function(episodes) {
 #' @param episode An episode from [run()].
 #' @param file Path of the JSON file. Defaults to `<id>.json` in `dir`.
 #' @param dir Folder for episodes.
+#' @param children Also save the episodes of agents that ran as tools of this
+#'   one ([team()], [as_tool()]), inside the same file. [read_episode()]
+#'   makes them available again through [sub_episodes()].
 #' @return `save_episode()` returns the file path, invisibly; `read_episode()`
 #'   returns the episode.
 #' @examples
@@ -171,12 +199,18 @@ episodes_df <- function(episodes) {
 #' ep2 <- read_episode(f)
 #' }
 #' @export
-save_episode <- function(episode, file = NULL, dir = "episodes") {
+save_episode <- function(episode, file = NULL, dir = "episodes", children = TRUE) {
   if (is.null(file)) {
     dir.create(dir, showWarnings = FALSE, recursive = TRUE)
     file <- file.path(dir, paste0(episode$id, ".json"))
   }
-  writeLines(jsonlite::prettify(.to_json(unclass(episode))), file, useBytes = TRUE)
+  out <- unclass(episode)
+  if (children) {
+    # the episodes of agents that ran as tools, so a team run is saved whole
+    kids <- .with_children(list(episode))[-1]
+    if (length(kids)) out$sub_episodes <- lapply(kids, unclass)
+  }
+  writeLines(jsonlite::prettify(.to_json(out)), file, useBytes = TRUE)
   invisible(file)
 }
 
@@ -184,9 +218,17 @@ save_episode <- function(episode, file = NULL, dir = "episodes") {
 #' @export
 read_episode <- function(file) {
   x <- .from_json(paste(readLines(file, warn = FALSE, encoding = "UTF-8"), collapse = "\n"))
+  # sub-episodes saved with the lead become available to sub_episodes(),
+  # view_episode(), cost_ledger() and ai_use_statement() again
+  for (k in x$sub_episodes %||% list()) .register_sub_episode(.fix_episode(k), k$called_as_tool %||% NA_character_)
+  x$sub_episodes <- NULL
+  .fix_episode(x)
+}
+
+.fix_episode <- function(x) {
   for (f in c("stop_reason", "agent", "model", "task", "id")) {
     if (is.null(x[[f]]) || length(x[[f]]) == 0) x[[f]] <- NA_character_
   }
   if (is.null(x$seconds) || length(x$seconds) == 0) x$seconds <- NA_real_
-  structure(x, class = "episode")
+  structure(unclass(x), class = "episode")
 }

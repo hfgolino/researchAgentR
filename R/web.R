@@ -269,6 +269,11 @@ web_search <- function(query, n = 5, include_domains = NULL, exclude_domains = N
              "&hellip;" = "...", "&rsquo;" = "'", "&lsquo;" = "'",
              "&rdquo;" = "\"", "&ldquo;" = "\"")
   for (e in names(named)) x <- gsub(e, named[[e]], x, fixed = TRUE)
+  # Other named entities (accented letters, Greek letters, math symbols)
+  x <- .replace_matches(x, "&[A-Za-z][A-Za-z0-9]{1,7};", function(m) {
+    cp <- .entity_codepoints[substr(m, 2, nchar(m) - 1)]
+    if (is.na(cp)) m else intToUtf8(cp)
+  })
   # Numeric entities such as &#233; or &#xE9;
   x <- .replace_matches(x, "&#[0-9]+;", function(m) intToUtf8(as.integer(gsub("[&#;]", "", m))))
   x <- .replace_matches(x, "&#[xX][0-9a-fA-F]+;", function(m) {
@@ -276,6 +281,31 @@ web_search <- function(query, n = 5, include_domains = NULL, exclude_domains = N
   })
   gsub("&amp;", "&", x, fixed = TRUE)   # last, so "&amp;lt;" stays "&lt;"
 }
+
+# Code points of the named HTML entities a scholarly page is likely to use:
+# Latin-1 (160 to 255, in order), Greek letters and common math symbols.
+.entity_codepoints <- local({
+  latin1 <- c("nbsp", "iexcl", "cent", "pound", "curren", "yen", "brvbar", "sect", "uml", "copy",
+              "ordf", "laquo", "not", "shy", "reg", "macr", "deg", "plusmn", "sup2", "sup3",
+              "acute", "micro", "para", "middot", "cedil", "sup1", "ordm", "raquo", "frac14",
+              "frac12", "frac34", "iquest", "Agrave", "Aacute", "Acirc", "Atilde", "Auml", "Aring",
+              "AElig", "Ccedil", "Egrave", "Eacute", "Ecirc", "Euml", "Igrave", "Iacute", "Icirc",
+              "Iuml", "ETH", "Ntilde", "Ograve", "Oacute", "Ocirc", "Otilde", "Ouml", "times",
+              "Oslash", "Ugrave", "Uacute", "Ucirc", "Uuml", "Yacute", "THORN", "szlig", "agrave",
+              "aacute", "acirc", "atilde", "auml", "aring", "aelig", "ccedil", "egrave", "eacute",
+              "ecirc", "euml", "igrave", "iacute", "icirc", "iuml", "eth", "ntilde", "ograve",
+              "oacute", "ocirc", "otilde", "ouml", "divide", "oslash", "ugrave", "uacute", "ucirc",
+              "uuml", "yacute", "thorn", "yuml")
+  greek <- c("alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa",
+             "lambda", "mu", "nu", "xi", "omicron", "pi", "rho", "sigmaf", "sigma", "tau",
+             "upsilon", "phi", "chi", "psi", "omega")
+  Greek <- paste0(toupper(substr(greek, 1, 1)), substring(greek, 2))
+  out <- c(stats::setNames(160:255, latin1), stats::setNames(945:969, greek),
+           stats::setNames(913:937, Greek),
+           c(minus = 8722L, le = 8804L, ge = 8805L, ne = 8800L, asymp = 8776L, bull = 8226L,
+             trade = 8482L, euro = 8364L, prime = 8242L, Prime = 8243L, infin = 8734L))
+  out[names(out) != "Sigmaf"]   # there is no capital final sigma (930 is unassigned)
+})
 
 .replace_matches <- function(x, pattern, f) {
   m <- gregexpr(pattern, x, perl = TRUE)
@@ -359,7 +389,7 @@ html_to_text <- function(html, engine = c("auto", "xml2", "regex")) {
   title <- regmatches(html, regexpr("(?is)<title[^>]*>.*?</title>", html, perl = TRUE))
   title <- if (length(title)) .squish(.decode_entities(gsub("<[^>]+>", "", title))) else NA_character_
   x <- gsub("(?s)<!--.*?-->", " ", html, perl = TRUE)
-  for (tag in c("head", .drop_tags)) {
+  for (tag in c("head", "title", .drop_tags)) {
     x <- gsub(paste0("(?is)<", tag, "\\b[^>]*>.*?</", tag, ">"), " ", x, perl = TRUE)
   }
   # Mark headings with a placeholder that survives tag removal ("@@H2@@").

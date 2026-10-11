@@ -18,7 +18,11 @@ tuning").}
 }
 \value{
 A data frame of class \code{cost_ledger} with \code{kind}, \code{note}, \code{id},
-\code{model}, \code{tokens}, \code{cost}, \code{grading_cost}, \code{seconds}.
+\code{model}, \code{tokens}, \code{cost}, \code{grading_cost}, \code{seconds} and
+\code{within_parent}. Episodes of agents that ran as tools of a lead
+(\code{\link[=team]{team()}}, \code{\link[=as_tool]{as_tool()}}) are added as their own rows; their cost is
+already inside the lead's cost (its tool step), so \code{within_parent = TRUE}
+rows are shown but not added again to the printed total.
 }
 \description{
 Runtime cost is what the agent costs each time it does its job. Offline

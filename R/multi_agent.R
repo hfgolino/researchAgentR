@@ -64,6 +64,42 @@ sub_episodes <- function(id = NULL, clear = FALSE) {
   df
 }
 
+# Ids of the sub-episodes an episode started (the child_episode of its tool
+# steps), followed recursively through the registry.
+.child_ids <- function(ep) {
+  ids <- vapply(ep$steps %||% list(), function(s) {
+    x <- s$child_episode
+    if (identical(s$type, "tool") && length(x) == 1 && !is.na(x) && nzchar(x)) as.character(x) else NA_character_
+  }, character(1))
+  out <- character(0)
+  for (id in ids[!is.na(ids)]) {
+    out <- c(out, id)
+    if (exists(id, envir = .sub_episode_env, inherits = FALSE)) {
+      out <- c(out, .child_ids(get(id, envir = .sub_episode_env, inherits = FALSE)))
+    }
+  }
+  unique(out)
+}
+
+# Episodes plus the sub-episodes they started (kept in this session, or read
+# back with read_episode()). A worker's cost is already inside its parent's
+# tool step, so attribute "nested" marks the episodes whose cost must not be
+# added again when a parent is in the list.
+.with_children <- function(eps) {
+  have <- vapply(eps, function(e) as.character(e$id %||% NA_character_), character(1))
+  for (e in eps) {
+    for (id in .child_ids(e)) {
+      if (!id %in% have && exists(id, envir = .sub_episode_env, inherits = FALSE)) {
+        eps[[length(eps) + 1]] <- get(id, envir = .sub_episode_env, inherits = FALSE)
+        have <- c(have, id)
+      }
+    }
+  }
+  nested_ids <- unique(unlist(lapply(eps, .child_ids)))
+  attr(eps, "nested") <- have %in% nested_ids
+  eps
+}
+
 # ---- Agents as tools ------------------------------------------------------------
 
 # Tool names allow letters, digits, '_' and '-' (see define_tool()).

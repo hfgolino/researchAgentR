@@ -69,7 +69,12 @@ print.agent <- function(x, ...) {
 #' @param max_steps Maximum number of model calls.
 #' @param max_tokens Maximum billed tokens (input, cached input and output
 #'   summed over all calls).
-#' @param max_cost Maximum cost in US dollars at list price.
+#' @param max_cost Maximum cost in US dollars at list price. Token prices
+#'   come from [model_registry()]. Provider-side tools such as Groq's
+#'   `browser_search` may also charge per call; such fees are counted only
+#'   when set with, for example, `options(researchAgentR.builtin_fees =
+#'   c(browser_search = 0.005))` (US$ per call, from the provider's current
+#'   price list; the number here is only an example).
 #' @param max_seconds Maximum wall-clock time.
 #' @param max_tool_errors Stop after this many failed tool calls in a row.
 #' @return An object of class `budget`.

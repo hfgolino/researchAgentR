@@ -19,14 +19,16 @@ every DOI found in the tool outputs.}
 }
 \value{
 A data frame with one row per hit: \code{episode_id}, \code{step}, \code{where}
-(\code{"tool_call"} or \code{"tool_result"}), \code{tool}, \code{pattern}, \code{context} (the
+(\code{"tool_call"}, \code{"tool_result"} or \code{"builtin_result"}), \code{tool}, \code{pattern}, \code{context} (the
 text around the hit). Zero rows means no hit.
 }
 \description{
 A browsing agent can "solve" a benchmark by finding its answer key: the
 benchmark's repository, a page that lists the answers, or the exact
 expected answer in a search result. This function searches every tool
-call (arguments) and tool result in an episode for such strings. A hit is
+call (arguments) and tool result in an episode for such strings, including
+what provider-side tools returned (Groq \code{browser_search}, OpenAI
+\code{web_search}, remote MCP), which the episode keeps with the model step. A hit is
 a reason to read the trajectory, not automatic proof of cheating (a DOI
 task's answer will legitimately appear in a Crossref result).
 }
