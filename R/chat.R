@@ -167,9 +167,13 @@ print.llm_response <- function(x, ...) {
 }
 
 # Per-provider details for the Chat Completions adapter.
-.chat_quirks <- function(provider) {
+.chat_quirks <- function(provider, base_url = .provider_info(provider)$base_url) {
+  # OpenAI's reasoning models reject max_tokens; Groq, Cerebras and OpenRouter
+  # accept the newer name. Decided by address, so a provider registered by the
+  # user at the same address (for example "openai_chat") behaves the same.
+  new_name <- grepl("api\\.openai\\.com|api\\.groq\\.com|api\\.cerebras\\.ai|openrouter\\.ai", base_url)
   list(
-    max_tokens_field = if (provider %in% c("groq", "cerebras", "openrouter")) "max_completion_tokens" else "max_tokens",
+    max_tokens_field = if (new_name) "max_completion_tokens" else "max_tokens",
     send_reasoning = isTRUE(.opt(paste0("pass_reasoning.", provider), FALSE))
   )
 }

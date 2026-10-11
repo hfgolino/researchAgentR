@@ -138,7 +138,9 @@
   }
   # assistant: replay the provider's own output items when they came from the
   # same API (this keeps reasoning items), otherwise rebuild them
-  if (identical(x$native_api, "responses") && length(x$native)) return(x$native)
+  if (identical(x$native_api, "responses") && length(x$native) && isTRUE(.opt("replay_native", TRUE))) {
+    return(x$native)
+  }
   items <- list()
   if (nzchar(x$content %||% "")) items <- c(items, list(list(role = "assistant", content = x$content)))
   for (tc in x$tool_calls) {

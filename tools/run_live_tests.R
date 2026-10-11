@@ -43,4 +43,6 @@ install.packages("researchAgentR", repos = NULL, type = "source", quiet = TRUE)
 library(researchAgentR)
 message("researchAgentR ", utils::packageVersion("researchAgentR"), " installed.")
 
-source(file.path("researchAgentR", "tools", "live_smoke.R"), echo = FALSE)
+# live_script <- "diag_luna.R" before sourcing this file runs another script in tools/
+script <- if (exists("live_script")) live_script else "live_smoke.R"
+source(file.path("researchAgentR", "tools", script), echo = FALSE)

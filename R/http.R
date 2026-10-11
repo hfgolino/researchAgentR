@@ -98,6 +98,9 @@
             .cache_dir(), "). Run it once with use_cache(\"record\") while online.")
     }
   }
+  # The last request body is kept for inspection (no keys: those travel in
+  # headers or are stripped from URLs): researchAgentR:::.pkg_env$last_body
+  .pkg_env$last_body <- req$body$data
   t0 <- Sys.time()
   resp <- httr2::req_perform(req)
   out <- list(
