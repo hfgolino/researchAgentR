@@ -92,8 +92,12 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
     sp <- regexpr(" ", before, fixed = TRUE)
     if (sp > 0) a <- a + sp
   }
-  if (b < nchar(text)) {
-    tail <- substr(text, end + 1, b)
+  tail <- substr(text, end + 1, b)
+  stop_at <- regexpr("[.!?](\\s|$)", tail, perl = TRUE)
+  if (stop_at > 0) {
+    # End at the end of the sentence that holds the match.
+    b <- end + stop_at
+  } else if (b < nchar(text)) {
     sp <- gregexpr(" ", tail, fixed = TRUE)[[1]]
     if (sp[1] > 0) b <- end + max(sp) - 1
   }
@@ -696,12 +700,7 @@ print.manuscript_review <- function(x, n = 10, ...) {
 
 # ---- Report and revisions ---------------------------------------------------------
 
-.html_escape <- function(x) {
-  x <- gsub("&", "&amp;", x, fixed = TRUE)
-  x <- gsub("<", "&lt;", x, fixed = TRUE)
-  x <- gsub(">", "&gt;", x, fixed = TRUE)
-  gsub("\"", "&quot;", x, fixed = TRUE)
-}
+# HTML escaping uses .html_escape() from R/lens.R.
 
 #' Write a manuscript review as an HTML report
 #'

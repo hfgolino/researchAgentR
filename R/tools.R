@@ -272,10 +272,13 @@ call_tool <- function(tool_call, tools, arguments = NULL) {
     return(result(paste0("A person declined this call to ", tool$name,
                          ". Do not repeat it; continue without it or explain what you need."), TRUE))
   }
+  # setTimeLimit() cannot be nested, so tools that run other agents use
+  # timeout = Inf and rely on the sub-agent's own budget instead.
+  limited <- is.finite(tool$timeout)
   value <- tryCatch({
-    setTimeLimit(elapsed = tool$timeout, transient = TRUE)
+    if (limited) setTimeLimit(elapsed = tool$timeout, transient = TRUE)
     do.call(tool$fn, checked$arguments)
-  }, error = function(e) e, finally = setTimeLimit(elapsed = Inf))
+  }, error = function(e) e, finally = if (limited) setTimeLimit(elapsed = Inf))
   if (inherits(value, "error")) {
     msg <- conditionMessage(value)
     if (grepl("elapsed time limit", msg)) msg <- paste0("the tool took longer than ", tool$timeout, " seconds")

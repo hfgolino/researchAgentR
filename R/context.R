@@ -362,7 +362,7 @@ subagent <- function(agent, summary_words = 150, budget = researchAgentR::budget
     paste0("Ask the ", agent$name, " sub-agent to do a self-contained subtask.")
   define_tool(fn, paste(description, "It starts with no context: describe the subtask completely."),
               args = list(task = arg_string("The complete subtask, with every detail the sub-agent needs")),
-              name = .tool_name(agent$name), timeout = budget$max_seconds + 30,
+              name = .tool_name(agent$name), timeout = Inf,   # the sub-agent budget limits time
               max_output_tokens = max(200, ceiling(summary_words * 2)))
 }
 

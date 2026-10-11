@@ -121,6 +121,7 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
     reason <- .over_budget(ep, budget)
     if (!is.null(reason)) return(.finish(ep, messages, reason))
     sent <- agent$context$prepare(messages, ep)
+    ep <- .record_context(ep, sent, agent$context$name)   # e.g. the cost of a summary
     reply <- tryCatch(
       chat(sent, model = agent$model, tools = tools, max_tokens = agent$max_tokens,
            effort = agent$effort),

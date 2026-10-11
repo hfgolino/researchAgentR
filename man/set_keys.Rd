@@ -16,6 +16,7 @@
 \alias{set_semantic_scholar_key}
 \alias{set_ncbi_key}
 \alias{set_typesafe_key}
+\alias{set_brave_key}
 \title{Set API keys for a session}
 \usage{
 set_groq_key(key = Sys.getenv("GROQ_API_KEY"))
@@ -45,6 +46,8 @@ set_semantic_scholar_key(key = Sys.getenv("SEMANTIC_SCHOLAR_API_KEY"))
 set_ncbi_key(key = Sys.getenv("NCBI_API_KEY"))
 
 set_typesafe_key(key = Sys.getenv("TYPESAFE_API_KEY"))
+
+set_brave_key(key = Sys.getenv("BRAVE_API_KEY"))
 }
 \arguments{
 \item{key}{The key. Leave the default, which reads the environment variable.}
@@ -75,7 +78,13 @@ key into a script you might share.
    \code{set_semantic_scholar_key()} \tab \code{SEMANTIC_SCHOLAR_API_KEY} \tab Semantic Scholar (optional) \cr
    \code{set_ncbi_key()} \tab \code{NCBI_API_KEY} \tab PubMed E-utilities (optional) \cr
    \code{set_typesafe_key()} \tab \code{TYPESAFE_API_KEY} \tab Jev classification (paid) \cr
+   \code{set_brave_key()} \tab \code{BRAVE_API_KEY} \tab Brave web search (optional, paid) \cr
 }
+
+
+Crossref and Unpaywall ask for an e-mail address (the "polite pool"): add
+\code{RESEARCHAGENTR_EMAIL=you@university.edu} to \verb{~/.Renviron}, or set
+\code{options(researchAgentR.email = "you@university.edu")}.
 }
 \examples{
 \dontrun{

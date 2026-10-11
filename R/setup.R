@@ -36,6 +36,9 @@ verify_setup <- function(test_apis = FALSE) {
     k <- .get_key(s)
     add(paste("key", s), if (nzchar(k)) "set" else "not set", if (nzchar(k)) .mask(k) else .key_vars[[s]])
   }
+  email <- .opt("email") %||% Sys.getenv("RESEARCHAGENTR_EMAIL")
+  add("e-mail for Crossref/Unpaywall", if (nzchar(email)) "set" else "not set",
+      if (nzchar(email)) email else "RESEARCHAGENTR_EMAIL in ~/.Renviron (polite pool)")
   o <- tryCatch(ollama_status(), error = function(e) NULL)
   add("Ollama", if (is.null(o)) "not running" else "running",
       if (is.null(o)) "optional: https://ollama.com" else paste(nrow(o), "models pulled"))

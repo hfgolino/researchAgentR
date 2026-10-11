@@ -9,6 +9,7 @@
   openrouter = "OPENROUTER_API_KEY", openalex = "OPENALEX_API_KEY",
   tavily = "TAVILY_API_KEY", jina = "JINA_API_KEY", voyage = "VOYAGE_API_KEY",
   semantic_scholar = "SEMANTIC_SCHOLAR_API_KEY", ncbi = "NCBI_API_KEY",
+  brave = "BRAVE_API_KEY",
   typesafe = "TYPESAFE_API_KEY"
 )
 
@@ -58,6 +59,11 @@
 #' | `set_semantic_scholar_key()` | `SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar (optional) |
 #' | `set_ncbi_key()` | `NCBI_API_KEY` | PubMed E-utilities (optional) |
 #' | `set_typesafe_key()` | `TYPESAFE_API_KEY` | Jev classification (paid) |
+#' | `set_brave_key()` | `BRAVE_API_KEY` | Brave web search (optional, paid) |
+#'
+#' Crossref and Unpaywall ask for an e-mail address (the "polite pool"): add
+#' `RESEARCHAGENTR_EMAIL=you@university.edu` to `~/.Renviron`, or set
+#' `options(researchAgentR.email = "you@university.edu")`.
 #'
 #' @param key The key. Leave the default, which reads the environment variable.
 #' @return `TRUE`, invisibly. An error with instructions if no key is found.
@@ -112,3 +118,6 @@ set_ncbi_key <- function(key = Sys.getenv("NCBI_API_KEY")) .set_key("ncbi", key)
 #' @rdname set_keys
 #' @export
 set_typesafe_key <- function(key = Sys.getenv("TYPESAFE_API_KEY")) .set_key("typesafe", key)
+#' @rdname set_keys
+#' @export
+set_brave_key <- function(key = Sys.getenv("BRAVE_API_KEY")) .set_key("brave", key)

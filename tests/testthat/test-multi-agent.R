@@ -92,7 +92,7 @@ test_that("as_tool() wraps an agent as a one-argument tool", {
   expect_equal(names(t$args), "task")
   expect_equal(t$schema$required, list("task"))
   expect_true(t$untrusted)
-  expect_equal(t$timeout, 90)
+  expect_equal(t$timeout, Inf)   # time limits cannot be nested; the budget limits the worker
   expect_equal(t$description, "Finds papers on a topic.")
   t2 <- as_tool(agent("w", "Do it.", model = "groq:openai/gpt-oss-20b"))
   expect_match(t2$description, "Delegate a self-contained task")

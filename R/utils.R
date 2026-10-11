@@ -30,10 +30,12 @@
 }
 
 # A stable hash of any R object (used for cache keys and frozen rubrics).
+# Written in binary mode so the hash is identical on Windows, macOS and Linux
+# (a cache recorded on one computer must replay on another).
 .hash <- function(x) {
   f <- tempfile()
   on.exit(unlink(f))
-  writeLines(as.character(.to_json(x)), f, useBytes = TRUE)
+  writeBin(charToRaw(enc2utf8(as.character(.to_json(x)))), f)
   unname(tools::md5sum(f))
 }
 

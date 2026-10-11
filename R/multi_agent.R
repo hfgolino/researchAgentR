@@ -135,8 +135,9 @@ as_tool <- function(agent, budget = researchAgentR::budget(), name = agent$name,
                 "A self-contained task for this worker: the goal, what to return,",
                 "and any limits. The worker cannot see this conversation."))),
               name = tool_name,
-              # The worker's own budget limits its time; leave room for it here.
-              timeout = (budget$max_seconds %||% 300) + 30,
+              # The worker's own budget limits its time (time limits cannot be
+              # nested in R, so the tool itself has none).
+              timeout = Inf,
               max_output_tokens = 3000,
               # A worker's answer may quote web pages or papers: keep it marked as data.
               untrusted = TRUE)

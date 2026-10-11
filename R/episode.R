@@ -10,7 +10,7 @@
     tools = vapply(.agent_tools(agent), `[[`, character(1), "name"),
     context = agent$context$name, budget = unclass(budget),
     started = .now(), t0 = Sys.time(), steps = list(),
-    answer = NULL, stop_reason = NA_character_, finished = NA_character_,
+    answer = NULL, stop_reason = "running", finished = "",
     package_version = as.character(utils::packageVersion("researchAgentR")),
     r_version = R.version.string
   ), class = "episode")
@@ -62,20 +62,23 @@
 
 .totals <- function(ep) {
   steps <- ep$steps
-  pick <- function(type, field) sum(vapply(Filter(function(s) s$type == type, steps),
-                                           function(s) as.numeric(s[[field]] %||% 0), numeric(1)), na.rm = TRUE)
-  model_cost <- vapply(Filter(function(s) s$type == "model", steps), function(s) s$cost %||% NA_real_, numeric(1))
+  of <- function(types) Filter(function(s) s$type %in% types, steps)
+  total <- function(types, field) sum(vapply(of(types), function(s) as.numeric(s[[field]] %||% 0), numeric(1)), na.rm = TRUE)
+  billed <- c("model", "context")   # context steps are model calls made by a context strategy
+  costs <- vapply(steps, function(s) as.numeric(s$cost %||% 0), numeric(1))
   seconds <- ep$seconds %||% if (!is.null(ep$t0)) as.numeric(difftime(Sys.time(), ep$t0, units = "secs")) else NA_real_
-  ctx <- vapply(Filter(function(s) s$type == "model", steps), function(s) s$context_tokens %||% 0, numeric(1))
+  ctx <- vapply(of("model"), function(s) as.numeric(s$context_tokens %||% 0), numeric(1))
   list(
-    model_calls = sum(vapply(steps, function(s) s$type == "model", logical(1))),
-    tool_calls = sum(vapply(steps, function(s) s$type == "tool", logical(1))),
-    tool_errors = sum(vapply(steps, function(s) isTRUE(s$is_error), logical(1))),
-    input = pick("model", "input"), cache_read = pick("model", "cache_read"),
-    cache_write = pick("model", "cache_write"), output = pick("model", "output"),
-    tokens = pick("model", "input") + pick("model", "cache_read") + pick("model", "cache_write") + pick("model", "output"),
+    model_calls = length(of("model")),
+    tool_calls = length(of("tool")),
+    tool_errors = sum(vapply(of("tool"), function(s) isTRUE(s$is_error), logical(1))),
+    input = total(billed, "input"), cache_read = total(billed, "cache_read"),
+    cache_write = total(billed, "cache_write"), output = total(billed, "output"),
+    tokens = total(billed, "input") + total(billed, "cache_read") +
+      total(billed, "cache_write") + total(billed, "output"),
     peak_context = if (length(ctx)) max(ctx) else 0,
-    cost = if (anyNA(model_cost)) NA_real_ else sum(model_cost) + pick("tool", "cost"),
+    # one unpriced step makes the total unknown (NA) rather than too low
+    cost = if (anyNA(costs)) NA_real_ else sum(costs),
     seconds = seconds
   )
 }
@@ -181,5 +184,9 @@ save_episode <- function(episode, file = NULL, dir = "episodes") {
 #' @export
 read_episode <- function(file) {
   x <- .from_json(paste(readLines(file, warn = FALSE, encoding = "UTF-8"), collapse = "\n"))
+  for (f in c("stop_reason", "agent", "model", "task", "id")) {
+    if (is.null(x[[f]]) || length(x[[f]]) == 0) x[[f]] <- NA_character_
+  }
+  if (is.null(x$seconds) || length(x$seconds) == 0) x$seconds <- NA_real_
   structure(x, class = "episode")
 }

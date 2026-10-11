@@ -28,8 +28,18 @@
     is_transient = .is_transient,
     backoff = function(i) min(60, 2^i + stats::runif(1))
   )
-  if (!is.null(rpm)) req <- httr2::req_throttle(req, rate = rpm / 60, realm = realm %||% url)
+  if (!is.null(rpm)) req <- .throttle(req, rpm, realm %||% url)
   httr2::req_error(req, body = .error_body)
+}
+
+# Space requests evenly at `rpm` per minute. httr2 >= 1.1 uses a token bucket;
+# capacity = 1 avoids a burst of requests at the start (polite to free APIs).
+.throttle <- function(req, rpm, realm) {
+  if ("capacity" %in% names(formals(httr2::req_throttle))) {
+    httr2::req_throttle(req, capacity = 1, fill_time_s = 60 / rpm, realm = realm)
+  } else {
+    httr2::req_throttle(req, rate = rpm / 60, realm = realm)
+  }
 }
 
 # A 429 is worth retrying unless the provider says the spending cap was
@@ -50,7 +60,9 @@
   hint <- switch(as.character(httr2::resp_status(resp)),
     "401" = "Check the API key (see ?set_keys and verify_setup()).",
     "403" = "The key may not have access to this model or endpoint.",
-    "404" = "Check the model name with list_provider_models() or model_registry().",
+    "404" = if (grepl("/(chat/completions|responses|messages|models)$", httr2::resp_url(resp)))
+      "Check the model name with list_provider_models() or model_registry()." else
+      "The resource was not found (check the identifier, for example the DOI).",
     "413" = "The request is too large: reduce the context (see ?filter_output).",
     "429" = "Rate limit or quota reached: wait, use a smaller model, or see ?budget.",
     NULL)
@@ -63,7 +75,8 @@
   mode <- if (cache) .cache_mode() else "off"
   key <- NULL
   if (mode != "off") {
-    key <- .hash(list(url = req$url, body = req$body$data, method = req$method))
+    key <- .hash(list(url = .url_without_secrets(req$url), body = req$body$data,
+                      method = req$method))
     hit <- .cache_read(key)
     if (!is.null(hit)) return(c(hit, cached = TRUE))
     if (mode == "replay") {
@@ -84,7 +97,14 @@
   c(out, cached = FALSE)
 }
 
+# Keys and e-mail addresses in the URL are not part of the cache key, so a demo
+# recorded with the instructor's key replays for students with their own key.
+.url_without_secrets <- function(url) {
+  gsub("([?&])(api_key|apikey|key|mailto|email)=[^&]*&?", "\\1", url)
+}
+
 .resp_body <- function(resp) {
+  if (!httr2::resp_has_body(resp)) return(NULL)
   type <- httr2::resp_content_type(resp)
   if (grepl("json", type)) return(httr2::resp_body_json(resp, simplifyVector = FALSE))
   httr2::resp_body_string(resp)
@@ -94,7 +114,7 @@
 # free-tier limits); everything else is dropped.
 .keep_headers <- function(resp) {
   h <- httr2::resp_headers(resp)
-  keep <- grepl("^(x-ratelimit|retry-after|anthropic-ratelimit|request-id|x-request-id)",
+  keep <- grepl("^(x-ratelimit|retry-after|anthropic-ratelimit|request-id|x-request-id|mcp-session-id)",
                 tolower(names(h)))
   as.list(h[keep])
 }
