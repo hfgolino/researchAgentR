@@ -1,0 +1,48 @@
+Package: researchAgentR
+Title: LLM Agents for Research, Built from First Principles in R
+Version: 0.1.0
+Authors@R:
+    person("Hudson", "Golino", , "hfg9s@virginia.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-1601-1447"))
+Description: Build, trace, evaluate and optimize large language model agents
+    for research, in plain R. Provides one client for many model providers
+    (OpenAI-compatible Chat Completions, the OpenAI Responses API and the
+    Anthropic Messages API, covering Groq, OpenAI, Anthropic, Google Gemini,
+    Ollama and any compatible endpoint), tools defined from R functions, a
+    short and readable agent loop with budgets and explicit stop reasons, an
+    episode ledger with token, cost and latency for every step, context
+    management, memory and retrieval, research tools (OpenAlex, Crossref,
+    Semantic Scholar, Europe PMC, arXiv, Unpaywall, NIH RePORTER, NSF,
+    Grants.gov, web search), citation and claim verification, multi-agent
+    patterns, a Model Context Protocol client, an evaluation harness with
+    pass@k, pass^k, cost per success and paired bootstrap comparisons, and
+    tools for creating skills, learning a writing style and reviewing
+    manuscripts.
+License: GPL (>= 3)
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+LazyData: true
+Depends:
+    R (>= 4.1.0)
+Imports:
+    httr2 (>= 1.0.0),
+    jsonlite,
+    stats,
+    tools,
+    utils
+Suggests:
+    callr,
+    processx,
+    xml2,
+    pdftools,
+    ggplot2,
+    shiny,
+    mirai,
+    reticulate,
+    llmClassificR,
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
+URL: https://github.com/hfgolino/researchAgentR
+BugReports: https://github.com/hfgolino/researchAgentR/issues

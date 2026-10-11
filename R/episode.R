@@ -1,0 +1,184 @@
+# The episode ledger ("Lens"): every model call and tool call of a run, with
+# tokens, cost and latency, so a run can be inspected, costed, compared and
+# documented. Cost is counted per complete episode, failed attempts included.
+
+.new_episode <- function(agent, task, budget) {
+  structure(list(
+    id = paste0(format(Sys.time(), "%Y%m%d-%H%M%S"), "-", paste(sample(c(letters, 0:9), 4), collapse = "")),
+    agent = agent$name, model = agent$model, task = task,
+    instructions = agent$instructions,
+    tools = vapply(.agent_tools(agent), `[[`, character(1), "name"),
+    context = agent$context$name, budget = unclass(budget),
+    started = .now(), t0 = Sys.time(), steps = list(),
+    answer = NULL, stop_reason = NA_character_, finished = NA_character_,
+    package_version = as.character(utils::packageVersion("researchAgentR")),
+    r_version = R.version.string
+  ), class = "episode")
+}
+
+.record_model <- function(ep, reply, sent, verbose) {
+  u <- reply$usage
+  step <- list(
+    step = length(ep$steps) + 1, type = "model", time = .now(), model = reply$model,
+    latency = reply$latency %||% NA_real_, input = u$input, cache_read = u$cache_read,
+    cache_write = u$cache_write, output = u$output, reasoning_tokens = u$reasoning,
+    cost = reply$cost, cached = isTRUE(reply$cached),
+    context_tokens = count_tokens(.to_json(lapply(sent, function(m) m[c("role", "content")]))),
+    messages_sent = length(sent),
+    content = reply$content %||% "", reasoning = .shorten(reply$reasoning %||% "", 2000),
+    tool_calls = vapply(reply$tool_calls, function(tc) paste0(tc$name, "(", tc$arguments_raw, ")"), character(1)),
+    executed_tools = vapply(reply$executed_tools, function(x) as.character(x$type %||% x$name %||% "builtin"), character(1)),
+    stop_reason = reply$stop_reason %||% "", notes = reply$notes %||% character(0),
+    rate_limits = reply$headers %||% list()
+  )
+  ep$steps[[length(ep$steps) + 1]] <- step
+  if (verbose) .print_step(step)
+  ep
+}
+
+.record_tool <- function(ep, tc, res, verbose) {
+  step <- list(
+    step = length(ep$steps) + 1, type = "tool", time = .now(), tool = tc$name,
+    arguments = tc$arguments_raw %||% "", latency = res$latency, cost = res$cost %||% 0,
+    is_error = isTRUE(res$is_error), truncated = isTRUE(res$truncated),
+    result = substr(res$output, 1, .opt("log_chars", 4000)), result_chars = nchar(res$output)
+  )
+  ep$steps[[length(ep$steps) + 1]] <- step
+  if (verbose) .print_step(step)
+  ep
+}
+
+.finish <- function(ep, messages, reason, answer = NULL) {
+  ep$answer <- answer
+  ep$stop_reason <- reason
+  ep$finished <- .now()
+  ep$seconds <- as.numeric(difftime(Sys.time(), ep$t0, units = "secs"))
+  ep$messages <- lapply(messages, function(m) m[intersect(names(m), c("role", "content", "tool_call_id", "name", "is_error"))])
+  ep$t0 <- NULL
+  if (.verbose()) cat(sprintf("Stopped: %s\n", reason))
+  ep
+}
+
+.totals <- function(ep) {
+  steps <- ep$steps
+  pick <- function(type, field) sum(vapply(Filter(function(s) s$type == type, steps),
+                                           function(s) as.numeric(s[[field]] %||% 0), numeric(1)), na.rm = TRUE)
+  model_cost <- vapply(Filter(function(s) s$type == "model", steps), function(s) s$cost %||% NA_real_, numeric(1))
+  seconds <- ep$seconds %||% if (!is.null(ep$t0)) as.numeric(difftime(Sys.time(), ep$t0, units = "secs")) else NA_real_
+  ctx <- vapply(Filter(function(s) s$type == "model", steps), function(s) s$context_tokens %||% 0, numeric(1))
+  list(
+    model_calls = sum(vapply(steps, function(s) s$type == "model", logical(1))),
+    tool_calls = sum(vapply(steps, function(s) s$type == "tool", logical(1))),
+    tool_errors = sum(vapply(steps, function(s) isTRUE(s$is_error), logical(1))),
+    input = pick("model", "input"), cache_read = pick("model", "cache_read"),
+    cache_write = pick("model", "cache_write"), output = pick("model", "output"),
+    tokens = pick("model", "input") + pick("model", "cache_read") + pick("model", "cache_write") + pick("model", "output"),
+    peak_context = if (length(ctx)) max(ctx) else 0,
+    cost = if (anyNA(model_cost)) NA_real_ else sum(model_cost) + pick("tool", "cost"),
+    seconds = seconds
+  )
+}
+
+.print_step <- function(s) {
+  if (s$type == "model") {
+    what <- if (length(s$tool_calls)) paste("->", paste(.shorten(s$tool_calls, 90), collapse = "; ")) else
+      paste("->", .shorten(s$content, 90))
+    cat(sprintf("[%d] model  %6s in %5s out  $%.5f  %4.1fs %s\n", s$step,
+                format(s$input + s$cache_read + s$cache_write, big.mark = ","),
+                format(s$output, big.mark = ","), s$cost %||% NA_real_, s$latency, what))
+  } else {
+    cat(sprintf("[%d] tool   %-22s %4.1fs %s%s\n", s$step, s$tool, s$latency,
+                if (s$is_error) "ERROR " else "ok ", .shorten(s$result, 80)))
+  }
+}
+
+#' @export
+print.episode <- function(x, ...) {
+  t <- .totals(x)
+  cat("<episode>", x$id, "|", x$agent, "|", x$model, "\n")
+  cat("Task:", .shorten(x$task, 150), "\n")
+  cat(sprintf("Stop reason: %s | %d model calls, %d tool calls (%d errors)\n",
+              x$stop_reason, t$model_calls, t$tool_calls, t$tool_errors))
+  cat(sprintf("Tokens: %s billed (%s cached), peak context ~%s | cost $%.5f | %.1f s\n",
+              format(t$tokens, big.mark = ","), format(t$cache_read, big.mark = ","),
+              format(t$peak_context, big.mark = ","), t$cost, t$seconds))
+  cat("Answer:", if (is.null(x$answer)) "(none)" else .shorten(.as_text(x$answer), 400), "\n")
+  invisible(x)
+}
+
+#' Summaries of an episode or of many episodes
+#'
+#' `episode_steps()` gives one row per step of one episode; `episodes_df()`
+#' gives one row per episode, for comparing runs.
+#'
+#' @param episode An episode from [run()].
+#' @param episodes A list of episodes, or a folder of saved episode files.
+#' @return A data frame.
+#' @examples
+#' \dontrun{
+#' episode_steps(ep)
+#' episodes_df(list(ep1, ep2))
+#' }
+#' @export
+episode_steps <- function(episode) {
+  rows <- lapply(episode$steps, function(s) data.frame(
+    step = s$step, type = s$type, name = if (s$type == "model") s$model else s$tool,
+    input = s$input %||% NA, cache_read = s$cache_read %||% NA, cache_write = s$cache_write %||% NA,
+    output = if (s$type == "model") s$output else NA,
+    context_tokens = s$context_tokens %||% NA, cost = s$cost %||% NA, latency = s$latency %||% NA,
+    is_error = isTRUE(s$is_error), cached = isTRUE(s$cached),
+    detail = .shorten(if (s$type == "model") c(unlist(s$tool_calls), s$content) else s$result, 120),
+    stringsAsFactors = FALSE))
+  if (!length(rows)) return(data.frame())
+  do.call(rbind, rows)
+}
+
+#' @rdname episode_steps
+#' @export
+episodes_df <- function(episodes) {
+  if (is.character(episodes)) {
+    files <- if (dir.exists(episodes)) list.files(episodes, "\\.json$", full.names = TRUE) else episodes
+    episodes <- lapply(files, read_episode)
+  }
+  if (inherits(episodes, "episode")) episodes <- list(episodes)
+  do.call(rbind, lapply(episodes, function(e) {
+    t <- .totals(e)
+    data.frame(id = e$id, agent = e$agent, model = e$model, task = .shorten(e$task, 60),
+               stop_reason = e$stop_reason, model_calls = t$model_calls, tool_calls = t$tool_calls,
+               tool_errors = t$tool_errors, tokens = t$tokens, cache_read = t$cache_read,
+               peak_context = t$peak_context, cost = t$cost, seconds = t$seconds,
+               started = e$started, stringsAsFactors = FALSE)
+  }))
+}
+
+#' Save and read episodes
+#'
+#' Episodes are saved as JSON (readable by people and by other tools), one
+#' file per episode.
+#'
+#' @param episode An episode from [run()].
+#' @param file Path of the JSON file. Defaults to `<id>.json` in `dir`.
+#' @param dir Folder for episodes.
+#' @return `save_episode()` returns the file path, invisibly; `read_episode()`
+#'   returns the episode.
+#' @examples
+#' \dontrun{
+#' f <- save_episode(ep)
+#' ep2 <- read_episode(f)
+#' }
+#' @export
+save_episode <- function(episode, file = NULL, dir = "episodes") {
+  if (is.null(file)) {
+    dir.create(dir, showWarnings = FALSE, recursive = TRUE)
+    file <- file.path(dir, paste0(episode$id, ".json"))
+  }
+  writeLines(jsonlite::prettify(.to_json(unclass(episode))), file, useBytes = TRUE)
+  invisible(file)
+}
+
+#' @rdname save_episode
+#' @export
+read_episode <- function(file) {
+  x <- .from_json(paste(readLines(file, warn = FALSE, encoding = "UTF-8"), collapse = "\n"))
+  structure(x, class = "episode")
+}
