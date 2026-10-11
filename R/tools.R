@@ -285,7 +285,12 @@ call_tool <- function(tool_call, tools, arguments = NULL) {
   short <- .truncate_tokens(text, tool$max_output_tokens)
   truncated <- !identical(short, text)
   if (isTRUE(tool$untrusted)) short <- .wrap_untrusted(short, tool$name)
-  result(short, FALSE, value, truncated = truncated, cost = tool$cost_per_call)
+  # A tool may report its own cost (for example a sub-agent's episode cost)
+  # through attr(value, "cost"); otherwise the fixed fee applies.
+  out <- result(short, FALSE, value, truncated = truncated,
+                cost = attr(value, "cost") %||% tool$cost_per_call)
+  out$child <- attr(value, "episode_id")
+  out
 }
 
 .wrap_untrusted <- function(text, name) {

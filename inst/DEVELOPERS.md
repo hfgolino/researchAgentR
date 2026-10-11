@@ -64,7 +64,10 @@ Exported core:
   `validate = function(arguments) list(arguments=, problems=)` to replace the
   default argument check.
 - `call_tool(tool_call, tools, arguments)` runs a call safely; returns
-  `list(id, name, output, is_error, value, truncated, cost, latency)`.
+  `list(id, name, output, is_error, value, truncated, cost, latency, child)`.
+  A tool function may set `attr(value, "cost")` (USD) to report a dynamic
+  cost, and `attr(value, "episode_id")` to link a sub-agent's episode; the
+  ledger records both (tool steps get `cost` and `child_episode`).
 - `builtin_tool(type, ...)`, `remote_mcp_tool(...)`.
 - `agent(name, instructions, model, tools, description, output_schema,
   context, max_tokens, effort)`; `output_schema` is a named list of `arg_*()`

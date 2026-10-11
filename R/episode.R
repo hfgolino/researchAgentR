@@ -41,7 +41,8 @@
     step = length(ep$steps) + 1, type = "tool", time = .now(), tool = tc$name,
     arguments = tc$arguments_raw %||% "", latency = res$latency, cost = res$cost %||% 0,
     is_error = isTRUE(res$is_error), truncated = isTRUE(res$truncated),
-    result = substr(res$output, 1, .opt("log_chars", 4000)), result_chars = nchar(res$output)
+    result = substr(res$output, 1, .opt("log_chars", 4000)), result_chars = nchar(res$output),
+    child_episode = res$child %||% NA_character_
   )
   ep$steps[[length(ep$steps) + 1]] <- step
   if (verbose) .print_step(step)
