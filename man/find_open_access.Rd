@@ -29,6 +29,6 @@ Set the email with \code{options(researchAgentR.email = ...)} or
 }
 \examples{
 \dontrun{
-find_open_access(c("10.1037/met0000255", "10.1007/s11336-021-09820-y"))
+find_open_access(c("10.1080/00273171.2020.1779642", "10.1007/s11336-021-09820-y"))
 }
 }

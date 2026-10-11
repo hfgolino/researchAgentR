@@ -21,7 +21,7 @@ budget; see \url{https://developers.openalex.org/api-reference/authentication.md
 }
 \examples{
 \dontrun{
-w <- get_work("10.1037/met0000255")
+w <- get_work("10.1080/00273171.2020.1779642")
 w$title
 head(attr(w, "referenced_works"))
 }

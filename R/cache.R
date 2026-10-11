@@ -91,6 +91,10 @@ keep <- function(name, expr, refresh = FALSE, dir = file.path(cache_dir(), "kept
     return(value)
   }
   value <- expr
+  if (inherits(value, "episode") && grepl("^api_error", value$stop_reason %||% "")) {
+    .warn("keep(): '", name, "' ended with ", value$stop_reason, "; not saved, so the next call retries.")
+    return(value)
+  }
   attr(value, "kept_at") <- .now()
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
   saveRDS(value, f)

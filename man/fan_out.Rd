@@ -49,7 +49,7 @@ send messages can conflict.
 \dontrun{
 summarizer <- agent("summarizer", "Summarize the paper with this DOI in two sentences.",
                     model = "groq:openai/gpt-oss-20b", tools = list(tool_crossref()))
-res <- fan_out(summarizer, c("10.1037/met0000476", "10.1037/met0000255"))
+res <- fan_out(summarizer, c("10.1037/met0000476", "10.1080/00273171.2020.1779642"))
 res
 summary(res)
 }

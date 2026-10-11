@@ -288,7 +288,7 @@ ctx_compact <- function(trigger_tokens = 6000, keep_last = 4, model = default_mo
 #' ctx <- ctx_notes(tempfile(fileext = ".md"))
 #' ctx
 #' vapply(ctx$tools, `[[`, "", "name")
-#' notes_write("EGA tutorial: doi 10.1037/met0000255", ctx$file)
+#' notes_write("EGA tutorial: doi 10.1080/00273171.2020.1779642", ctx$file)
 #' msgs <- list(list(role = "system", content = "Research assistant."),
 #'              list(role = "user", content = "Find the EGA tutorial."))
 #' ctx$prepare(msgs, NULL)[[3]]$content

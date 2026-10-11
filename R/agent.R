@@ -178,7 +178,9 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
     "When the task is complete, call the final_answer tool with arguments that follow its schema."
   }
   paste(agent$instructions,
-        paste0("Today's date is ", format(Sys.Date()), "."),
+        # options(researchAgentR.today = "2026-12-01") pins the date, so a run
+        # recorded on one day replays from the cache on another.
+        paste0("Today's date is ", .opt("today", format(Sys.Date())), "."),
         .untrusted_rule, finish, sep = "\n\n")
 }
 

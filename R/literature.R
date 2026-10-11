@@ -313,7 +313,7 @@ search_openalex <- function(query, n = 10, filter = NULL, year_from = NULL, year
 #'   cites. An error if the work is not found.
 #' @examples
 #' \dontrun{
-#' w <- get_work("10.1037/met0000255")
+#' w <- get_work("10.1080/00273171.2020.1779642")
 #' w$title
 #' head(attr(w, "referenced_works"))
 #' }
@@ -350,8 +350,8 @@ get_work <- function(doi_or_id) {
 #'   attribute `seed` (the starting work's OpenAlex ID).
 #' @examples
 #' \dontrun{
-#' refs <- get_references("10.1037/met0000255", n = 50)
-#' cites <- get_citations("10.1037/met0000255", n = 50)
+#' refs <- get_references("10.1080/00273171.2020.1779642", n = 50)
+#' cites <- get_citations("10.1080/00273171.2020.1779642", n = 50)
 #' nrow(refs); nrow(cites)
 #' }
 #' @name snowball
@@ -753,7 +753,7 @@ search_arxiv <- function(query, n = 10, sort = c("relevance", "submittedDate", "
 #'   `host_type`, `checked_with` (`"Unpaywall"` or `"OpenAlex"`), `detail`.
 #' @examples
 #' \dontrun{
-#' find_open_access(c("10.1037/met0000255", "10.1007/s11336-021-09820-y"))
+#' find_open_access(c("10.1080/00273171.2020.1779642", "10.1007/s11336-021-09820-y"))
 #' }
 #' @export
 find_open_access <- function(doi) {
@@ -1124,7 +1124,7 @@ tool_unpaywall <- function() {
     description = paste(
       "Find a free, legal full-text copy (open access) of a paper from its DOI.",
       "Returns whether it is open access, the best link, the PDF link and the license."),
-    args = list(doi = arg_string("The DOI, for example '10.1037/met0000255'.")))
+    args = list(doi = arg_string("The DOI, for example '10.1080/00273171.2020.1779642'.")))
 }
 
 #' @rdname research_tools

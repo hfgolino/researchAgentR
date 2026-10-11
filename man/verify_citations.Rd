@@ -66,7 +66,7 @@ request per second (see \code{\link[=search_crossref]{search_crossref()}}), so 3
 \examples{
 \dontrun{
 refs <- data.frame(
-  doi = c("10.1037/met0000255", "10.9999/made.up.2024"),
+  doi = c("10.1080/00273171.2020.1779642", "10.9999/made.up.2024"),
   title = c(paste("Investigating the performance of exploratory graph analysis and",
                   "traditional techniques to identify the number of latent factors:",
                   "A simulation and tutorial"), "A paper"),

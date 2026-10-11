@@ -75,8 +75,10 @@
   mode <- if (cache) .cache_mode() else "off"
   key <- NULL
   if (mode != "off") {
+    # The salt separates repeated trials of the same request (see run_eval()):
+    # each trial is recorded and replayed separately instead of replaying trial 1.
     key <- .hash(list(url = .url_without_secrets(req$url), body = req$body$data,
-                      method = req$method))
+                      method = req$method, salt = .pkg_env$cache_salt))
     hit <- .cache_read(key)
     if (!is.null(hit)) return(c(hit, cached = TRUE))
     if (mode == "replay") {

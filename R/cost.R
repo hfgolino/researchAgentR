@@ -54,7 +54,12 @@ cascade <- function(models, verifier, agent = NULL, budget = researchAgentR::bud
     episodes <- list()
     attempts <- list()
     verify_cost <- 0
-    for (m in models) {
+    base_salt <- .pkg_env$cache_salt
+    on.exit(.pkg_env$cache_salt <- base_salt, add = TRUE)
+    for (a in seq_along(models)) {
+      m <- models[[a]]
+      # A retry with the same model must be a new request, not a cached replay.
+      .pkg_env$cache_salt <- paste(base_salt %||% "", "attempt", a, sep = ":")
       ep <- run(make_agent(m), .task_prompt(task), budget, verbose = FALSE)
       v <- .as_check(verifier(ep$answer, task))
       verify_cost <- verify_cost + v$cost

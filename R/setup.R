@@ -24,8 +24,8 @@ verify_setup <- function(test_apis = FALSE) {
     rows[[length(rows) + 1]] <<- data.frame(check = check, status = status, detail = detail,
                                              stringsAsFactors = FALSE)
   }
-  add("R version", if (getRversion() >= "4.3.0") "OK" else "UPDATE",
-      paste(R.version$major, R.version$minor, sep = "."))
+  rv <- paste(R.version$major, R.version$minor, sep = ".")
+  add("R version", if (getRversion() >= "4.3.0") "OK" else if (getRversion() >= "4.1.0") "OK (4.3+ recommended)" else "UPDATE", rv)
   for (p in c("httr2", "jsonlite")) add(paste("package", p), "OK", as.character(utils::packageVersion(p)))
   for (p in c("callr", "xml2", "pdftools", "ggplot2", "processx")) {
     ok <- requireNamespace(p, quietly = TRUE)

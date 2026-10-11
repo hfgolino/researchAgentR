@@ -37,8 +37,8 @@ List-and-filter calls cost $0.10 per 1,000 of the OpenAlex daily budget.
 }
 \examples{
 \dontrun{
-refs <- get_references("10.1037/met0000255", n = 50)
-cites <- get_citations("10.1037/met0000255", n = 50)
+refs <- get_references("10.1080/00273171.2020.1779642", n = 50)
+cites <- get_citations("10.1080/00273171.2020.1779642", n = 50)
 nrow(refs); nrow(cites)
 }
 }

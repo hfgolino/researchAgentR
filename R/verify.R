@@ -248,7 +248,7 @@
 #' @examples
 #' \dontrun{
 #' refs <- data.frame(
-#'   doi = c("10.1037/met0000255", "10.9999/made.up.2024"),
+#'   doi = c("10.1080/00273171.2020.1779642", "10.9999/made.up.2024"),
 #'   title = c(paste("Investigating the performance of exploratory graph analysis and",
 #'                   "traditional techniques to identify the number of latent factors:",
 #'                   "A simulation and tutorial"), "A paper"),
@@ -328,7 +328,7 @@ tool_verify_citations <- function(check_retraction = TRUE) {
     args = list(citations = arg_array("The citations to check.", items = arg_object(
       "One citation.",
       fields = list(
-        doi = arg_string("The DOI, for example '10.1037/met0000255'."),
+        doi = arg_string("The DOI, for example '10.1080/00273171.2020.1779642'."),
         title = arg_string("The cited title.", required = FALSE),
         first_author = arg_string("Surname of the first author.", required = FALSE),
         year = arg_integer("Publication year.", required = FALSE))))),

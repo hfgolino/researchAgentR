@@ -204,7 +204,13 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
 # new "Surname, I." starts after a period inside a paragraph.
 .reference_entries <- function(refs_text) {
   e <- unlist(strsplit(refs_text, "\n", fixed = TRUE))
-  e <- unlist(strsplit(e, "(?<=\\.)\\s+(?=\\p{Lu}[\\p{L}'\u2019-]+,\\s+\\p{Lu}\\.)", perl = TRUE))
+  # Split a line into several references only when it holds more than one
+  # (year): long author lists ("A, B., ... Z, Y.") must stay in one piece.
+  n_years <- lengths(regmatches(e, gregexpr("\\((\\d{4}[a-z]?|n\\.d\\.)\\)", e)))
+  e <- unlist(lapply(seq_along(e), function(i) {
+    if (n_years[i] <= 1) return(e[i])
+    strsplit(e[i], "(?<=\\.)\\s+(?=\\p{Lu}[\\p{L}'\u2019-]+,\\s+\\p{Lu}\\.)", perl = TRUE)[[1]]
+  }))
   e <- trimws(sub("^\\s*([-*]|\\d+\\.)\\s+", "", e))
   e[nzchar(e)]
 }
@@ -354,7 +360,7 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
     if (!length(code)) next
     res <- tryCatch(runner(paste(code, collapse = "\n")), error = function(e) e)
     err <- if (inherits(res, "error")) conditionMessage(res) else if (is.list(res)) {
-      if (isTRUE(res$is_error) || isFALSE(res$ok) || (is.character(res$error) && any(nzchar(res$error)))) {
+      if (isTRUE(res$is_error) || isFALSE(res$ok) || (is.character(res$error) && any(!is.na(res$error) & nzchar(res$error)))) {
         paste(res$error %||% res$output %||% "error", collapse = " ")
       }
     }
@@ -514,6 +520,8 @@ review_manuscript <- function(path, focus = c("argument", "clarity", "structure"
   model_rows <- list()
   failed <- character(0)
   costs <- numeric(0)
+  # Text before the first heading (or a .txt file) has no section name.
+  body$section[is.na(body$section) | !nzchar(body$section)] <- "(no heading)"
   keys <- unique(body[c("file", "section")])
   for (s in seq_len(nrow(keys))) {
     sec <- body[body$file == keys$file[s] & body$section == keys$section[s], , drop = FALSE]

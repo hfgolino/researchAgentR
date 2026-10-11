@@ -191,7 +191,12 @@ run_eval <- function(solver, tasks, trials = 3, budget = researchAgentR::budget(
   for (r in seq_len(nrow(plan))) {
     i <- plan$i[r]
     .msg(sprintf("[%d/%d] %s, trial %d", r, nrow(plan), tasks$id[i], plan$trial[r]))
+    # Each trial gets its own cache "salt", so with use_cache() on, trial 2 is a
+    # new request (recorded and replayed separately), not a replay of trial 1.
+    old_salt <- .pkg_env$cache_salt
+    .pkg_env$cache_salt <- paste("eval", tasks$id[i], plan$trial[r], sep = ":")
     outcomes[[r]] <- .run_trial(solver, .task_row(tasks, i, public = TRUE), budget, save_dir)
+    .pkg_env$cache_salt <- old_salt
   }
 
   # Phase 2: grade, in random order, with the full task (answer key included).
@@ -503,7 +508,7 @@ task_compare <- function(a, b, metric = "pass") {
 print.paired_bootstrap <- function(x, ...) {
   cat(sprintf("<paired_bootstrap> %s: %s (b) minus %s (a) over %d shared tasks\n",
               x$metric, x$b_name, x$a_name, x$n_tasks))
-  cat(sprintf("Mean a = %.3f, mean b = %.3f, difference = %.3f, 95%% CI [%.3f, %.3f] (%d resamples of tasks)\n",
+  cat(sprintf("Mean a = %.4g, mean b = %.4g, difference = %.4g, 95%% CI [%.4g, %.4g] (%d resamples of tasks)\n",
               x$a_mean, x$b_mean, x$estimate, x$lower, x$upper, x$R))
   ch <- table(factor(x$per_task$change, c("gain", "same", "regression")))
   cat(sprintf("Per task: %d gains, %d same, %d regressions (see $per_task)\n",
