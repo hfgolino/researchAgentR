@@ -16,9 +16,11 @@ A data frame with one row per check (\code{check}, \code{status},
 \description{
 Checks the R version, required and optional packages, which API keys are
 stored (masked), and whether Ollama is running. With \code{test_apis = TRUE} it
-also sends one tiny request to each service that has a key: model lists
-for model providers (no tokens used) and a single-record lookup for
-OpenAlex and Crossref (free).
+also sends tiny requests to each service that has a key: the model list
+(checks the key, no tokens used), a one-line chat for Groq, OpenAI and
+Anthropic (checks that the account can be billed; a key on an account
+without credit passes the first test and fails this one; cost well under
+US$0.001), and a single-record lookup for OpenAlex and Crossref (free).
 }
 \examples{
 \dontrun{

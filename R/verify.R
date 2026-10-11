@@ -10,17 +10,23 @@
 
 # Token-set Jaccard similarity of two titles after normalization (case,
 # accents, punctuation): shared words divided by all distinct words, from 0
-# (nothing shared) to 1 (same words). Vectorized over pairs.
+# (nothing shared) to 1 (same words). Titles are also compared without their
+# subtitles (the part after the first colon), because references often cite
+# the main title only; the higher similarity is kept. Vectorized over pairs.
 .title_similarity <- function(a, b) {
-  tok <- function(x) unique(strsplit(.lit_normalize_text(x), " ", fixed = TRUE)[[1]])
-  mapply(function(x, y) {
-    if (is.na(x) || is.na(y)) return(NA_real_)
-    tx <- tok(x)
-    ty <- tok(y)
-    tx <- tx[nzchar(tx)]
-    ty <- ty[nzchar(ty)]
+  tok <- function(x) {
+    t <- unique(strsplit(.lit_normalize_text(x), " ", fixed = TRUE)[[1]])
+    t[nzchar(t)]
+  }
+  jaccard <- function(tx, ty) {
     if (length(tx) == 0 || length(ty) == 0) return(NA_real_)
     length(intersect(tx, ty)) / length(union(tx, ty))
+  }
+  main <- function(x) sub("\\s*[:?.]\\s.*$", "", x)
+  mapply(function(x, y) {
+    if (is.na(x) || is.na(y)) return(NA_real_)
+    sims <- c(jaccard(tok(x), tok(y)), jaccard(tok(main(x)), tok(main(y))))
+    if (all(is.na(sims))) NA_real_ else max(sims, na.rm = TRUE)
   }, a, b, USE.NAMES = FALSE)
 }
 

@@ -128,10 +128,10 @@ check("openai_web_search", chat("Find the DOI of the 2022 Psychometrika article 
       max_tokens = 2000), needs = "OPENAI_API_KEY", summary = resp_summary)
 register_provider("groq_responses", "https://api.groq.com/openai/v1", api = "responses",
                   key_env = "GROQ_API_KEY")
-check("groq_remote_mcp", chat("Using the deepwiki tools, what does the R package httr2 (repository r-lib/httr2) do? One sentence.",
+check("groq_remote_mcp", chat("Using the deepwiki tools, what does the R package in the GitHub repository hfgolino/EGAnet do? One sentence.",
       model = "groq_responses:openai/gpt-oss-120b",
       tools = list(remote_mcp_tool("https://mcp.deepwiki.com/mcp", "deepwiki",
-                                   allowed_tools = c("ask_question"))), max_tokens = 2000),
+                                   allowed_tools = c("ask_wiki_question"))), max_tokens = 2000),
       needs = "GROQ_API_KEY", summary = resp_summary)
 
 # ---- 6. Literature and verification --------------------------------------------
@@ -140,7 +140,9 @@ check("search_openalex", search_openalex("exploratory graph analysis dimensional
       summary = function(d) paste(nrow(d), "rows;", paste(d$doi, collapse = ", ")))
 check("get_work", get_work(doi_dev), summary = function(d) paste(d$title, d$year))
 check("get_references", get_references(doi_dev, n = 5), summary = function(d) paste(nrow(d), "rows"))
-check("get_citations", get_citations(doi_dev, n = 5), summary = function(d) paste(nrow(d), "rows"))
+check("get_citations", get_citations(doi_dev, n = 5), summary = function(d) paste(nrow(d), "rows;", paste(d$cited_by_count, collapse = ",")))
+check("search_openalex_sorted", search_openalex("dynamic exploratory graph analysis", n = 3, sort = "-cited_by_count"),
+      summary = function(d) paste(nrow(d), "rows;", paste(d$cited_by_count, collapse = ",")))
 check("search_crossref", search_crossref("exploratory graph analysis", n = 3),
       summary = function(d) paste(nrow(d), "rows;", paste(d$doi, collapse = ", ")))
 check("search_semantic_scholar", search_semantic_scholar("exploratory graph analysis", n = 3),
@@ -159,7 +161,7 @@ check("verify_citations", verify_citations(data.frame(
 check("check_claims", check_claims(
         data.frame(claim = c("DynEGA was more accurate than LDA in estimating the number of topics.",
                              "DynEGA was invented in 1990."),
-                   quote = c("DynEGA is substantially more accurate than several different LDA algorithms",
+                   quote = c("DynEGA is substantially more accurate than several different LDA algorithms when estimating the number of simulated topics",
                              "DynEGA was first proposed in 1990"),
                    source = c("dynega", "dynega")),
         sources = c(dynega = "The results show that DynEGA is substantially more accurate than several different LDA algorithms when estimating the number of simulated topics."),
@@ -204,6 +206,15 @@ for (m in c("jina:jina-embeddings-v3", "voyage:voyage-4", "openai:text-embedding
             "ollama:nomic-embed-text", "ollama:all-minilm")) {
   key <- switch(sub(":.*", "", m), jina = "JINA_API_KEY", voyage = "VOYAGE_API_KEY",
                 openai = "OPENAI_API_KEY", ollama = NULL)
+  if (startsWith(m, "ollama:")) {
+    pulled <- tryCatch(sub(":latest$", "", ollama_status()$name), error = function(e) character(0))
+    if (!sub("^ollama:", "", m) %in% pulled) {
+      results[[paste0("embed_", m)]] <- data.frame(id = paste0("embed_", m), status = "SKIP", seconds = NA,
+        detail = paste("not pulled: ollama pull", sub("^ollama:", "", m)))
+      cat(sprintf("%-34s SKIP (ollama pull %s)\n", paste0("embed_", m), sub("^ollama:", "", m)))
+      next
+    }
+  }
   check(paste0("embed_", m), embed_texts(texts, model = m), needs = key,
         summary = function(e) paste(dim(e)[1], "x", dim(e)[2], "| cos(1,2) =",
                                     round(sum(e[1, ] * e[2, ]), 3), "cos(1,3) =", round(sum(e[1, ] * e[3, ]), 3)))
@@ -224,10 +235,10 @@ client <- check("mcp_connect", mcp_connect("https://mcp.deepwiki.com/mcp"),
                 summary = function(x) substr(paste(capture.output(print(x)), collapse = " "), 1, 300))
 if (inherits(client, "mcp_client")) {
   check("mcp_list_tools", mcp_list_tools(client), summary = function(d) paste(d$name, collapse = ", "))
-  check("mcp_call", mcp_call(client, "ask_question", list(repoName = "r-lib/httr2",
-        question = "What is httr2 in one sentence?")), summary = function(x) substr(x$text, 1, 300))
+  check("mcp_call", mcp_call(client, "ask_wiki_question", list(repoName = "hfgolino/EGAnet",
+        question = "What does EGAnet do, in one sentence?")), summary = function(x) substr(x$text, 1, 300))
   check("agent_mcp_tools", run(agent("wiki", "Answer using the deepwiki tools.", model = "groq:openai/gpt-oss-120b",
-        tools = mcp_as_tools(client, tools = "ask_question")),
+        tools = mcp_as_tools(client, tools = "ask_wiki_question")),
         "What does the GitHub repository hfgolino/EGAnet provide? One sentence.", budget(max_steps = 5)),
         needs = "GROQ_API_KEY", summary = ep_summary)
 }
@@ -290,7 +301,8 @@ if (nzchar(planted)) {
 # ---- 14. Local models (only when Ollama is running) ---------------------------------
 ol <- tryCatch(ollama_status(), error = function(e) NULL)
 if (!is.null(ol) && nrow(ol)) {
-  for (m in intersect(c("qwen3:4b", "qwen3:8b", "phi4-mini:latest", "gpt-oss:20b"), ol$name)) {
+  # every pulled model that is not an embedding model
+  for (m in ol$name[!grepl("embed|minilm|bge|e5", ol$name)]) {
     check(paste0("loop_ollama_", m), run(make_counter(paste0("ollama:", m)),
           paste0("How many words are in: '", sentence, "'?"), budget(max_steps = 6, max_seconds = 240)),
           summary = loop_summary)

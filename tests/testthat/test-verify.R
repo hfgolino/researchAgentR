@@ -138,3 +138,11 @@ test_that("check_claims() asks a model whether quotes support claims", {
   expect_true(out$status[2] %in% c("not_supported", "unclear"))
   expect_gte(attr(out, "cost"), 0)
 })
+
+test_that("title similarity also compares main titles without subtitles", {
+  s <- researchAgentR:::.title_similarity(
+    c("Entropy fit indices", "A different paper"),
+    c("Entropy Fit Indices: New Fit Measures for Assessing Dimensionality", "Entropy Fit Indices: New Fit Measures"))
+  expect_equal(s[1], 1)
+  expect_lt(s[2], 0.5)
+})

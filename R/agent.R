@@ -127,7 +127,14 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
            effort = agent$effort),
       error = function(e) e)
     if (inherits(reply, "error")) {
-      return(.finish(ep, messages, paste("api_error:", conditionMessage(reply))))
+      if (!.invalid_tool_call(reply)) return(.finish(ep, messages, paste("api_error:", conditionMessage(reply))))
+      # The provider rejected a malformed tool call (for example a tool that
+      # does not exist): count it as a tool error and let the model retry.
+      ep <- .record_invalid_call(ep, reply, verbose)
+      messages <- c(messages, list(list(role = "user", content = paste0(
+        "Your last reply was rejected: ", .error_line(reply), " Call only these tools: ",
+        paste(vapply(tools, `[[`, character(1), "name"), collapse = ", "), "."))))
+      next
     }
     ep <- .record_model(ep, reply, sent, verbose)
     messages <- c(messages, list(.assistant_message(reply)))
@@ -225,4 +232,29 @@ ctx_full <- function() {
 print.context_strategy <- function(x, ...) {
   cat("<context_strategy>", x$name, "\n")
   invisible(x)
+}
+
+# Groq rejects a tool call that does not match the request's tools with HTTP 400
+# ("Tool call validation failed", code tool_use_failed); gpt-oss sometimes
+# calls a tool named "json" or writes broken arguments. Such errors are the
+# model's mistakes, so the loop reports them back instead of stopping.
+.invalid_tool_call <- function(e) {
+  grepl("tool call validation failed|tool_use_failed|failed to call a function|failed_generation",
+        conditionMessage(e), ignore.case = TRUE)
+}
+
+.error_line <- function(e) {
+  lines <- strsplit(conditionMessage(e), "\n")[[1]]
+  lines <- trimws(sub("^\\W+", "", lines, perl = TRUE))
+  paste(.shorten(lines[nzchar(lines)][-1], 300), collapse = " ")
+}
+
+.record_invalid_call <- function(ep, e, verbose) {
+  step <- list(step = length(ep$steps) + 1, type = "tool", time = .now(), tool = "(invalid tool call)",
+               arguments = "", latency = 0, cost = 0, is_error = TRUE, truncated = FALSE,
+               result = .error_line(e), result_chars = nchar(.error_line(e)),
+               child_episode = NA_character_)
+  ep$steps[[length(ep$steps) + 1]] <- step
+  if (verbose) .print_step(step)
+  ep
 }

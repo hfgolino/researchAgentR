@@ -8,7 +8,7 @@
 \usage{
 get_references(id_or_doi, n = 50)
 
-get_citations(id_or_doi, n = 50, sort = "-cited_by_count")
+get_citations(id_or_doi, n = 50, sort = "cited_by_count:desc")
 }
 \arguments{
 \item{id_or_doi}{A DOI or OpenAlex work ID.}
@@ -16,8 +16,8 @@ get_citations(id_or_doi, n = 50, sort = "-cited_by_count")
 \item{n}{Maximum number of works to return.}
 
 \item{sort}{For \code{get_citations()}, the order, for example
-\code{"-cited_by_count"} (most cited first, the default) or
-\code{"-publication_date"} (newest first).}
+\code{"cited_by_count:desc"} (most cited first, the default) or
+\code{"publication_date:desc"} (newest first).}
 }
 \value{
 A data frame with the columns of \code{\link[=search_openalex]{search_openalex()}} and the

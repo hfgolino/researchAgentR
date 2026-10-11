@@ -53,14 +53,21 @@
 }
 
 .error_body <- function(resp) {
+  # Providers put the message in different places: error.message (OpenAI,
+  # Groq, Anthropic), error as a plain string (Ollama), message or detail.
   msg <- tryCatch({
     b <- httr2::resp_body_json(resp)
-    b$error$message %||% b$message %||% b$detail %||% b$error %||% ""
+    m <- if (is.list(b$error)) b$error$message else b$error
+    m <- m %||% b$message %||% b$detail %||% ""
+    if (is.character(m)) paste(m, collapse = " ") else ""
   }, error = function(e) "")
+  url <- httr2::resp_url(resp)
   hint <- switch(as.character(httr2::resp_status(resp)),
     "401" = "Check the API key (see ?set_keys and verify_setup()).",
     "403" = "The key may not have access to this model or endpoint.",
-    "404" = if (grepl("/(chat/completions|responses|messages|models)$", httr2::resp_url(resp)))
+    "404" = if (grepl(":11434/", url))
+      "Ollama does not have this model: pull it first in a terminal (ollama pull <model>), then check ollama_status()." else
+      if (grepl("/(chat/completions|responses|messages|models|embed|embeddings)$", url))
       "Check the model name with list_provider_models() or model_registry()." else
       "The resource was not found (check the identifier, for example the DOI).",
     "413" = "The request is too large: reduce the context (see ?filter_output).",
@@ -79,7 +86,8 @@
     # each trial is recorded and replayed separately instead of replaying trial 1.
     key <- .hash(list(url = .url_without_secrets(req$url), body = req$body$data,
                       method = req$method, salt = .pkg_env$cache_salt))
-    hit <- .cache_read(key)
+    # "record" always calls the API (and overwrites); "auto" and "replay" read
+    hit <- if (mode == "record") NULL else .cache_read(key)
     if (!is.null(hit)) return(c(hit, cached = TRUE))
     if (mode == "replay") {
       .stop("No recording for this request in the replay cache (",

@@ -142,6 +142,20 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
   paste0(gsub("[^a-z]", "", s), "_", tolower(gsub("\\s+", " ", year)))
 }
 
+# A citation key is found when the year matches and the surnames match, or one
+# begins with the other (at least 4 letters), so "Deepseek (2024)" finds
+# "DeepSeek-AI (2024)" in the reference list.
+.cite_found <- function(keys, ref_keys) {
+  split <- function(k) list(a = sub("_.*$", "", k), y = sub("^[^_]*_", "", k))
+  r <- split(ref_keys)
+  vapply(keys, function(k) {
+    c <- split(k)
+    same_year <- r$y == c$y
+    prefix <- nchar(c$a) >= 4 & (startsWith(r$a, c$a) | startsWith(c$a, r$a)) & nchar(r$a) >= 4
+    any(same_year & (r$a == c$a | prefix))
+  }, logical(1), USE.NAMES = FALSE)
+}
+
 # In-text author-year citations in one paragraph. Handled patterns:
 #   parenthetical  (Lee, 2019) (Lee & Kim, 2019) (Lee et al., 2019a)
 #                  (Lee, 2019; Kim and Park, 2020) (see Lee, 2019, p. 4)
@@ -230,7 +244,7 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
   }))
   rows <- list()
   if (!is.null(cites)) {
-    missing <- cites[!cites$key %in% parsed$key, , drop = FALSE]
+    missing <- cites[!.cite_found(cites$key, parsed$key), , drop = FALSE]
     for (k in unique(missing$key)) {
       first <- missing[missing$key == k, ][1, ]
       n <- sum(missing$key == k)
@@ -291,9 +305,7 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
 # statistic and degrees of freedom is flagged; a decision error (the
 # conclusion about significance changes) is flagged as high severity.
 .check_statistics <- function(body) {
-  if (!requireNamespace("statcheck", quietly = TRUE)) {
-    return(list(rows = NULL, note = "Statistics not checked: install the statcheck package to enable this check."))
-  }
+  if (!requireNamespace("statcheck", quietly = TRUE)) return(.check_statistics_base(body))
   res <- tryCatch(suppressMessages(statcheck::statcheck(body$text, messages = FALSE)),
                   error = function(e) e)
   if (inherits(res, "error")) return(list(rows = NULL, note = paste("statcheck failed:", conditionMessage(res))))
@@ -310,6 +322,57 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
                 "Recomputed with statcheck::statcheck().", paragraph = body$paragraph[i])
   })
   list(rows = do.call(rbind, rows), note = sprintf("%d test result(s) checked with statcheck.", nrow(res)))
+}
+
+# Without statcheck: the same idea in base R for the common APA formats
+# t(df) = x, F(df1, df2) = x, r(df) = x, z = x and chi2(df) = x, each followed
+# by "p = ..." or "p < ...". The reported p is consistent when it matches a p
+# recomputed from any value that rounds to the reported statistic.
+.stat_pattern <- paste0(
+  "\\b(t|F|r|z|chi2|\u03c7\u00b2|\u03c72)\\s*(?:\\(\\s*([0-9.]+)\\s*(?:,\\s*([0-9.]+)\\s*)?\\))?",
+  "\\s*=\\s*(-?[0-9]*\\.?[0-9]+)\\s*,\\s*p\\s*([=<])\\s*(0?\\.[0-9]+)")
+
+.recompute_p <- function(test, df1, df2, value) {
+  switch(test,
+    t = 2 * stats::pt(-abs(value), df1),
+    F = stats::pf(value, df1, df2, lower.tail = FALSE),
+    r = { tv <- value * sqrt(df1 / (1 - value^2)); 2 * stats::pt(-abs(tv), df1) },
+    z = 2 * stats::pnorm(-abs(value)),
+    stats::pchisq(value, df1, lower.tail = FALSE))   # chi-square
+}
+
+.check_statistics_base <- function(body) {
+  rows <- list(); n_checked <- 0
+  for (i in seq_len(nrow(body))) {
+    hits <- regmatches(body$text[i], gregexpr(.stat_pattern, body$text[i], perl = TRUE))[[1]]
+    for (h in hits) {
+      g <- regmatches(h, regexec(.stat_pattern, h, perl = TRUE))[[1]]
+      test <- if (g[2] %in% c("t", "F", "r", "z")) g[2] else "chi2"
+      df1 <- suppressWarnings(as.numeric(g[3])); df2 <- suppressWarnings(as.numeric(g[4]))
+      if (test != "z" && is.na(df1)) next
+      if (test == "F" && is.na(df2)) next
+      value <- as.numeric(g[5]); reported <- as.numeric(g[7])
+      # every statistic that rounds to the reported one, and the p-values it gives
+      half <- 0.5 * 10^-(nchar(sub("^[^.]*\\.?", "", g[5])))
+      p_range <- range(.recompute_p(test, df1, df2, value + c(-half, half)))
+      p_digits <- nchar(sub("^[^.]*\\.", "", g[7]))
+      ok <- if (g[6] == "<") p_range[1] < reported else
+        round(p_range[1], p_digits) <= reported && reported <= round(p_range[2], p_digits)
+      n_checked <- n_checked + 1
+      if (ok) next
+      p_now <- .recompute_p(test, df1, df2, value)
+      decision <- (reported < 0.05) != (p_now < 0.05)
+      rows[[length(rows) + 1]] <- .suggestion(
+        "check", body$file[i], body$section[i], "reporting", if (decision) "high" else "medium", h,
+        sprintf("The reported p-value does not match the test statistic: recomputed p = %.4f.%s",
+                p_now, if (decision) " The conclusion about significance changes." else ""),
+        "Recomputed in base R from the test statistic and degrees of freedom (two-tailed).",
+        paragraph = body$paragraph[i])
+    }
+  }
+  list(rows = do.call(rbind, rows),
+       note = sprintf("%d test result(s) checked in base R (t, F, r, z, chi-square); statcheck covers more formats.",
+                      n_checked))
 }
 
 # Figure and table labels that are never referenced, in .Rmd, .qmd, .md and

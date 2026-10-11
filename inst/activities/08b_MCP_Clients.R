@@ -73,15 +73,15 @@ deepwiki_url <- "https://mcp.deepwiki.com/mcp"
 # Look under the hood: the exact message and headers the client sends.
 # (These are internal helpers, reached with :::, shown only for teaching.)
 msg <- researchAgentR:::.mcp_message("tools/call", id = 2L,
-  params = list(name = "ask_question",
-                arguments = list(repoName = "r-lib/httr2", question = "What is req_retry()?")))
+  params = list(name = "ask_wiki_question",
+                arguments = list(repoName = "tidyverse/ggplot2", question = "What is geom_smooth()?")))
 cat(jsonlite::toJSON(msg, auto_unbox = TRUE, pretty = TRUE))
 str(researchAgentR:::.mcp_headers(msg, version = "2026-07-28"))
 # EXPECTED OUTPUT: a JSON-RPC request with method "tools/call", the tool name
 # and arguments, and params$`_meta` holding the protocol version 2026-07-28,
 # the client info (researchAgentR and its version) and its capabilities;
 # then the headers Accept, MCP-Protocol-Version, Mcp-Method (tools/call) and
-# Mcp-Name (ask_question).
+# Mcp-Name (ask_wiki_question).
 
 
 # ==============================================================================
@@ -105,10 +105,10 @@ dw$state$version
 
 dw_tools <- mcp_list_tools(dw)
 dw_tools[, c("name", "description")]
-cat(dw_tools$input_schema[dw_tools$name == "ask_question"], "\n")
+cat(dw_tools$input_schema[dw_tools$name == "ask_wiki_question"], "\n")
 # EXPECTED OUTPUT: the server's tools (DeepWiki documents read_wiki_structure,
-# read_wiki_contents and ask_question) with their descriptions, then the JSON
-# Schema of ask_question: the argument names to use (repoName and question).
+# read_wiki_contents and ask_wiki_question) with their descriptions, then the JSON
+# Schema of ask_wiki_question: the argument names to use (repoName and question).
 
 # READ the descriptions before giving any tool to an agent: they go into the
 # model's context on every call, they cost tokens, and they are written by
@@ -128,13 +128,13 @@ cat(substr(structure_ega$text, 1, 1500), "\n")
 # EXPECTED OUTPUT: FALSE, then the list of topics of DeepWiki's generated wiki
 # for the EGAnet repository.
 
-answer_httr2 <- mcp_call(dw, "ask_question", list(
-  repoName = "r-lib/httr2",
-  question = "How does req_retry() decide how long to wait between retries?"))
-cat(substr(answer_httr2$text, 1, 2000), "\n")
-# EXPECTED OUTPUT: a text answer about httr2's retry and backoff behavior.
+answer_gg <- mcp_call(dw, "ask_wiki_question", list(
+  repoName = "tidyverse/ggplot2",
+  question = "How does geom_smooth() choose its default smoothing method?"))
+cat(substr(answer_gg$text, 1, 2000), "\n")
+# EXPECTED OUTPUT: a text answer about how geom_smooth() picks loess or a GAM by sample size.
 # The answer is written by DeepWiki's own model: it is a claim to verify
-# (?httr2::req_retry or the source code), not a fact.
+# (?ggplot2::geom_smooth or the source code), not a fact.
 
 # Two kinds of failure:
 # (a) A tool error is a normal result with is_error = TRUE (the server ran
@@ -157,9 +157,9 @@ tryCatch(mcp_call(dw, "no_such_tool", list()),
 
 # Keep the menu short: only the tool the job needs. The prefix keeps names
 # unique when an agent uses several servers.
-repo_tools <- mcp_as_tools(dw, tools = "ask_question", prefix = "deepwiki_")
+repo_tools <- mcp_as_tools(dw, tools = "ask_wiki_question", prefix = "deepwiki_")
 repo_tools[[1]]
-# EXPECTED OUTPUT: "<agent_tool> deepwiki_ask_question" with the server's
+# EXPECTED OUTPUT: "<agent_tool> deepwiki_ask_wiki_question" with the server's
 # description, its arguments (from the server's schema) and the flag
 # "output untrusted".
 
@@ -167,7 +167,7 @@ repo_helper <- agent(
   name = "repo_helper",
   model = "groq:openai/gpt-oss-120b",
   instructions = paste(
-    "Answer questions about R packages on GitHub using the deepwiki_ask_question tool.",
+    "Answer questions about R packages on GitHub using the deepwiki_ask_wiki_question tool.",
     "Name the functions involved, say that the answer comes from DeepWiki, and say what",
     "the researcher should check in the package documentation."),
   tools = repo_tools)
@@ -177,7 +177,7 @@ ep_repo <- run(repo_helper,
   budget = budget(max_steps = 5, max_cost = 0.02))
 ep_repo
 episode_steps(ep_repo)[, c("step", "type", "name", "is_error", "detail")]
-# EXPECTED OUTPUT: a model step, a deepwiki_ask_question tool step with the
+# EXPECTED OUTPUT: a model step, a deepwiki_ask_wiki_question tool step with the
 # server's answer (wrapped as untrusted data), and a final answer. Check the
 # function names it gives against the EGAnet documentation.
 
@@ -224,7 +224,7 @@ if (nzchar(Sys.which("npx"))) {
 # require_approval = "always" to see what the model WOULD send.
 
 dw_remote <- remote_mcp_tool(deepwiki_url, server_label = "deepwiki",
-                             allowed_tools = "ask_question", require_approval = "never")
+                             allowed_tools = "ask_wiki_question", require_approval = "never")
 class(dw_remote)
 str(dw_remote$spec)
 # EXPECTED OUTPUT: "builtin_tool", then its spec: type "mcp", server_label,
@@ -260,9 +260,9 @@ vapply(r_remote$executed_tools, function(x) if (is.null(x$type)) NA_character_ e
 # instead of calling the server. This package records it in executed_tools
 # but does not send approval responses, so the call does not happen: use it
 # to SEE what the model wanted to send.
-r_ask <- chat("Using the deepwiki tool, what does the R package r-lib/httr2 do?",
+r_ask <- chat("Using the deepwiki tool, what does the R package tidyverse/ggplot2 do?",
               model = "groq_responses:openai/gpt-oss-120b",
-              tools = list(remote_mcp_tool(deepwiki_url, "deepwiki", allowed_tools = "ask_question",
+              tools = list(remote_mcp_tool(deepwiki_url, "deepwiki", allowed_tools = "ask_wiki_question",
                                            require_approval = "always")))
 str(r_ask$executed_tools, max.level = 2)
 # EXPECTED OUTPUT: an item whose type names an approval request, with the
@@ -285,12 +285,12 @@ str(r_ask$executed_tools, max.level = 2)
 # ==============================================================================
 
 # Exercise 1. Measure what a tool menu costs: count the tokens of the JSON
-#   Schemas and descriptions of all DeepWiki tools versus ask_question only
+#   Schemas and descriptions of all DeepWiki tools versus ask_wiki_question only
 #   (count_tokens() on dw_tools).
 # Exercise 2. Write a function that connects, lists the tools and closes the
 #   connection, and returns the tool names, or NA with a message when the
 #   server cannot be reached. Test it with DeepWiki and with a wrong URL.
-# Exercise 3. Build an agent that combines an MCP tool (ask_question) with a
+# Exercise 3. Build an agent that combines an MCP tool (ask_wiki_question) with a
 #   package tool (tool_crossref() from Activity 03): it should find what a
 #   package function does AND the DOI of the paper that introduced the method.
 # Exercise 4. List the differences between STEP 5 and STEP 7 for a researcher

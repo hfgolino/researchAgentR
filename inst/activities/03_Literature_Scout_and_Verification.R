@@ -499,7 +499,7 @@ attr(claim_judged, "cost")
 # 3. Search Crossref with a full reference string instead of keywords:
 #    search_crossref(paste("Entropy Fit Indices: New Fit Measures for Assessing the Structure",
 #                          "and Dimensionality of Multiple Latent Variables 2020"), n = 3)
-# 4. Sort OpenAlex by citations: search_openalex(topic, n = 10, sort = "-cited_by_count")
+# 4. Sort OpenAlex by citations: search_openalex(topic, n = 10, sort = "cited_by_count:desc")
 
 
 # ==============================================================================

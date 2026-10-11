@@ -150,3 +150,19 @@ test_that("review_manuscript works live", {
   expect_true(all(model_rows$found))
   expect_equal(attr(rv, "counts")$quotes_dropped, NROW(attr(rv, "dropped")))
 })
+
+test_that("base-R statistics check flags an impossible p-value", {
+  body <- data.frame(file = "f", section = "s", paragraph = 1L, stringsAsFactors = FALSE,
+                     text = "Higher, t(63) = 2.31, p = .002. Also F(2, 100) = 3.10, p = .049 and z = 1.96, p < .05.")
+  x <- researchAgentR:::.check_statistics_base(body)
+  expect_equal(nrow(x$rows), 1)
+  expect_match(x$rows$quote, "t\\(63\\) = 2.31")
+  expect_match(x$rows$suggestion, "0.0242")
+  expect_equal(x$rows$severity, "medium")
+})
+
+test_that("citation keys match organizational authors by prefix and year", {
+  f <- researchAgentR:::.cite_found
+  expect_equal(f(c("deepseek_2024", "lee_2019", "smith_2020"),
+                 c("deepseekai_2024", "leeds_2019", "smith_2021")), c(TRUE, FALSE, FALSE))
+})

@@ -25,8 +25,9 @@ search_openalex(
 
 \item{type}{Optional work type, for example \code{"article"} or \code{"review"}.}
 
-\item{sort}{Optional sort, for example \code{"-cited_by_count"} or
-\code{"-publication_date"} (a leading \code{-} sorts in descending order). The
+\item{sort}{Optional sort, for example \code{"cited_by_count:desc"} or
+\code{"publication_date:desc"} (OpenAlex syntax: append \verb{:desc} for
+descending order; a leading \code{-} is also accepted). The
 default is relevance.}
 }
 \value{

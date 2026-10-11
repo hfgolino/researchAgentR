@@ -1,6 +1,8 @@
-# Generative psychometrics via AI-GENIE: Automatic item generation and validation with network-integrated evaluation
+---
+notice: "Adapted for teaching from Russell-Lasalandra, Christensen and Golino (2026), Behavior Research Methods, 58, 217, https://doi.org/10.3758/s13428-026-03082-1, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Changes: excerpted. Do not cite this version; cite the original article."
+---
 
-Adapted for teaching from Russell-Lasalandra, Christensen and Golino (2026), Behavior Research Methods, 58, 217, https://doi.org/10.3758/s13428-026-03082-1, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Changes: excerpted. Do not cite this version; cite the original article.
+# Generative psychometrics via AI-GENIE: Automatic item generation and validation with network-integrated evaluation
 
 Lara L. Russell-Lasalandra, Alexander P. Christensen, Hudson Golino
 

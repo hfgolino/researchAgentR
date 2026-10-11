@@ -197,6 +197,13 @@ normalize_doi <- function(x) {
   )
 }
 
+# OpenAlex sorts with "field:desc" (https://developers.openalex.org/guides/sort,
+# accessed 2026-10-11); "-field", common in other APIs, returns HTTP 400.
+.openalex_sort <- function(sort) {
+  if (is.null(sort)) return(NULL)
+  if (startsWith(sort, "-")) paste0(substring(sort, 2), ":desc") else sort
+}
+
 # GET https://api.openalex.org/<path>, with the free key when there is one.
 .openalex_get <- function(path, query = list()) {
   key <- .get_key("openalex")
@@ -261,8 +268,9 @@ normalize_doi <- function(x) {
 #' @param filter Optional extra OpenAlex filter string (see Details).
 #' @param year_from,year_to Optional first and last publication years.
 #' @param type Optional work type, for example `"article"` or `"review"`.
-#' @param sort Optional sort, for example `"-cited_by_count"` or
-#'   `"-publication_date"` (a leading `-` sorts in descending order). The
+#' @param sort Optional sort, for example `"cited_by_count:desc"` or
+#'   `"publication_date:desc"` (OpenAlex syntax: append `:desc` for
+#'   descending order; a leading `-` is also accepted). The
 #'   default is relevance.
 #' @return A data frame with the common columns `title`, `year`, `doi`,
 #'   `authors`, `source`, `abstract`, `oa_url`, `id`, `database`, plus
@@ -283,7 +291,7 @@ search_openalex <- function(query, n = 10, filter = NULL, year_from = NULL, year
                if (!is.null(year_from)) paste0("from_publication_date:", as.integer(year_from), "-01-01"),
                if (!is.null(year_to)) paste0("to_publication_date:", as.integer(year_to), "-12-31"),
                if (!is.null(type)) paste0("type:", type))
-  q <- list(search = query, sort = sort,
+  q <- list(search = query, sort = .openalex_sort(sort),
             filter = if (length(filters)) paste(filters, collapse = ",") else NULL)
   out <- .openalex_list(q, n)
   attr(out, "query") <- query
@@ -344,8 +352,8 @@ get_work <- function(doi_or_id) {
 #' @param id_or_doi A DOI or OpenAlex work ID.
 #' @param n Maximum number of works to return.
 #' @param sort For `get_citations()`, the order, for example
-#'   `"-cited_by_count"` (most cited first, the default) or
-#'   `"-publication_date"` (newest first).
+#'   `"cited_by_count:desc"` (most cited first, the default) or
+#'   `"publication_date:desc"` (newest first).
 #' @return A data frame with the columns of [search_openalex()] and the
 #'   attribute `seed` (the starting work's OpenAlex ID).
 #' @examples
@@ -375,10 +383,10 @@ get_references <- function(id_or_doi, n = 50) {
 
 #' @rdname snowball
 #' @export
-get_citations <- function(id_or_doi, n = 50, sort = "-cited_by_count") {
+get_citations <- function(id_or_doi, n = 50, sort = "cited_by_count:desc") {
   id <- .openalex_path_id(id_or_doi)
   if (startsWith(id, "doi:")) id <- get_work(id_or_doi)$id
-  out <- .openalex_list(list(filter = paste0("cites:", id), sort = sort), n)
+  out <- .openalex_list(list(filter = paste0("cites:", id), sort = .openalex_sort(sort)), n)
   attr(out, "seed") <- id
   out
 }

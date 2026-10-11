@@ -5,9 +5,11 @@
 #'
 #' Checks the R version, required and optional packages, which API keys are
 #' stored (masked), and whether Ollama is running. With `test_apis = TRUE` it
-#' also sends one tiny request to each service that has a key: model lists
-#' for model providers (no tokens used) and a single-record lookup for
-#' OpenAlex and Crossref (free).
+#' also sends tiny requests to each service that has a key: the model list
+#' (checks the key, no tokens used), a one-line chat for Groq, OpenAI and
+#' Anthropic (checks that the account can be billed; a key on an account
+#' without credit passes the first test and fails this one; cost well under
+#' US$0.001), and a single-record lookup for OpenAlex and Crossref (free).
 #'
 #' @param test_apis Send the test requests?
 #' @return A data frame with one row per check (`check`, `status`,
@@ -47,8 +49,19 @@ verify_setup <- function(test_apis = FALSE) {
       res <- tryCatch({ expr; "OK" }, error = function(e) paste("FAILED:", .shorten(conditionMessage(e), 120)))
       add(paste("API", label), if (identical(res, "OK")) "OK" else "FAILED", if (identical(res, "OK")) "" else res)
     }
+    # Listing models checks the key; a tiny chat call also checks that the
+    # account can be billed (a valid key with no credit fails only here).
+    test_models <- c(groq = "groq:openai/gpt-oss-20b", openai = "openai:gpt-6-luna",
+                     anthropic = "anthropic:claude-haiku-5-5")
+    old_cache <- .pkg_env$cache_mode
+    .pkg_env$cache_mode <- "off"
+    on.exit(.pkg_env$cache_mode <- old_cache, add = TRUE)
     for (p in c("groq", "openai", "anthropic", "gemini", "mistral", "cerebras", "openrouter")) {
-      if (nzchar(.get_key(p))) test(p, list_provider_models(p))
+      if (!nzchar(.get_key(p))) next
+      test(p, list_provider_models(p))
+      if (p %in% names(test_models)) {
+        test(paste(p, "chat"), chat("Reply with OK.", model = test_models[[p]], max_tokens = 64))
+      }
     }
     test("openalex", .openalex_ping())
     test("crossref", .crossref_ping())

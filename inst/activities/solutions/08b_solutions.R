@@ -24,7 +24,7 @@ dw_tools <- keep("deepwiki_tools", {
 })
 menu_tokens <- count_tokens(paste(dw_tools$name, dw_tools$description, dw_tools$input_schema))
 data.frame(tool = dw_tools$name, tokens = menu_tokens)
-c(all_tools = sum(menu_tokens), ask_question_only = sum(menu_tokens[dw_tools$name == "ask_question"]))
+c(all_tools = sum(menu_tokens), ask_wiki_question_only = sum(menu_tokens[dw_tools$name == "ask_wiki_question"]))
 # EXPECTED OUTPUT: approximate tokens per tool (about 4 characters per token)
 # and the total for the full menu versus one tool. The menu is sent with
 # EVERY model call of the episode, so multiply by the number of calls.
@@ -63,11 +63,11 @@ method_agent <- agent(
   name = "method_explainer",
   model = "groq:openai/gpt-oss-120b",
   instructions = paste(
-    "Explain what an R package function does, using deepwiki_ask_question, and find",
+    "Explain what an R package function does, using deepwiki_ask_wiki_question, and find",
     "the DOI of the paper that introduced the method, using crossref. Report the DOI",
     "exactly as the crossref tool returned it, and say which source each statement",
     "comes from."),
-  tools = c(mcp_as_tools(dw, tools = "ask_question", prefix = "deepwiki_"),
+  tools = c(mcp_as_tools(dw, tools = "ask_wiki_question", prefix = "deepwiki_"),
             list(tool_crossref(n = 5))))
 ep3 <- run(method_agent,
   "What does EGA() in the R package hfgolino/EGAnet do, and what is the DOI of the article that introduced exploratory graph analysis?",
@@ -77,7 +77,7 @@ episode_steps(ep3)[, c("step", "type", "name", "is_error")]
 mcp_close(dw)
 # Verify the DOI in code before trusting it (Activity 03):
 # verify_citations(<the DOI from ep3$answer>)
-# EXPECTED OUTPUT: tool steps for deepwiki_ask_question and crossref, and an
+# EXPECTED OUTPUT: tool steps for deepwiki_ask_wiki_question and crossref, and an
 # answer that names EGA(), gives a DOI and attributes each statement.
 
 
