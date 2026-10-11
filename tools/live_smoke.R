@@ -97,10 +97,11 @@ counter_tool <- define_tool(word_count, "Count the words in a text.",
                             args = list(text = arg_string("The text to count")))
 sentence <- "Exploratory graph analysis estimates the number of dimensions in multivariate data"
 expected <- word_count(sentence)
-# Wording matters: with "Never count by yourself" and a field called n_words,
-# gpt-6-luna often counted the words of its OWN answer (see tools/diag_luna.R).
+# Wording matters (tools/diag_luna.R): with "Never count by yourself" and a
+# field called n_words, gpt-6-luna often counted the words of its OWN answer;
+# with "the user's text" it sometimes counted the whole question.
 make_counter <- function(m) agent("counter",
-  "Count the words in the user's text with the word_count tool. Then call final_answer with the number the tool returned.",
+  "Count the words of the quoted text in the user's message (only the part between quotes) with the word_count tool. Then call final_answer with the number the tool returned.",
   model = m, tools = list(counter_tool),
   output_schema = list(count = arg_integer("The number that the word_count tool returned for the user's text")))
 loop_summary <- function(ep) paste(ep_summary(ep), "| correct =",

@@ -10,7 +10,18 @@
 # same turn as word_count, guessing before the result came back (the loop now
 # refuses that).
 #
-# This run compares the old wording with a clear one, five tries each.
+# Second diagnostic (live_logs/diag-20261011-184659), five tries each:
+#   luna_ambiguous 1/5, luna_clear 2/5, luna_chat_none 5/5, haiku_clear 5/5,
+#   gptoss120_ambiguous 5/5, gptoss120_clear 5/5.
+# The trajectories explain luna_clear: in all 5 tries luna reported exactly
+# what the tool returned, but in 3 it passed the WHOLE question ("How many
+# words are in: '...'?", 16 words) as "the user's text". So the clear
+# wording fixed faithfulness to the tool; what remained was an ambiguous
+# argument. With reasoning off (Chat Completions, effort "none") luna passed
+# the quoted text every time. Lesson for the course: grade the trajectory,
+# not only the final number.
+#
+# This script compares the old wording with a clear one, five tries each.
 # Run (after restarting R):  live_script <- "diag_luna.R"; source("run_live_tests.R")
 # Output: live_logs/diag-<timestamp>/diag.csv, episodes.rds
 
