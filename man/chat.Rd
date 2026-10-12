@@ -32,7 +32,9 @@ Not combined with \code{tools}: agents use a \code{final_answer} tool instead.}
 \item{max_tokens}{Maximum output tokens (reasoning tokens included).}
 
 \item{effort}{Reasoning effort for reasoning models (\code{"low"}, \code{"medium"},
-\code{"high"}); \code{NULL} leaves the provider default.}
+\code{"high"}); \code{NULL} leaves the provider default. For local models in Ollama,
+\code{"none"} switches thinking off (much faster on a laptop; \code{qwen3} thinks
+at length by default).}
 
 \item{temperature}{Sampling temperature; \code{NULL} leaves the provider default.
 Claude 5.x models reject it, so it is dropped for them and the drop is

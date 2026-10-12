@@ -519,7 +519,8 @@ planner_claude <- agent(name = "study_planner_claude", instructions = planner$in
 ep_claude <- keep("loop_planner_pilot_claude", run(planner_claude, task_pilot, budget = b))
 # OPTIONAL, LOCAL AND FREE (needs Ollama and `ollama pull qwen3:4b`):
 planner_local <- agent(name = "study_planner_local", instructions = planner$instructions,
-                       model = "ollama:qwen3:4b", tools = tools)
+                       model = "ollama:qwen3:4b", tools = tools,
+                       effort = "none")   # no long thinking: much faster on a laptop
 ep_local <- keep("loop_planner_pilot_local", run(planner_local, task_pilot, budget = b))
 
 episodes_df(list(ep_pilot, ep_claude, ep_local))

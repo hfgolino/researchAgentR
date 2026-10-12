@@ -10,7 +10,7 @@
 # Activity 11: small_tasks, serve_budget, finder_instructions, lean_tools,
 # answer_schema, harness_finder, harness_solver(), answer_of(), res_cloud,
 # res_local, res_harness, check_network(), toy_dir, toy_docs, librarian,
-# LOCAL_MODEL, CLOUD_MODEL and EMBED_MODEL. With use_cache("auto") and
+# LOCAL_MODEL, LOCAL_EFFORT, CLOUD_MODEL and EMBED_MODEL. With use_cache("auto") and
 # keep(), rerunning that script replays the recorded results.
 
 library(researchAgentR)
@@ -28,9 +28,10 @@ use_cache("auto")
 #   (b) tight menu + structured answer, no verification step
 #   (c) the full harness of Step 5 (res_harness)
 tight_only <- agent("finder_tight", harness_finder$instructions,
-                    model = LOCAL_MODEL, tools = lean_tools)
+                    model = LOCAL_MODEL, tools = lean_tools, effort = LOCAL_EFFORT)
 tight_schema <- agent("finder_tight_schema", harness_finder$instructions,
-                      model = LOCAL_MODEL, tools = lean_tools, output_schema = answer_schema)
+                      model = LOCAL_MODEL, tools = lean_tools, output_schema = answer_schema,
+                      effort = LOCAL_EFFORT)
 
 # The structured answer is a list (answer, matched_title): grade only the
 # answer field, and carry the ledger as harness_solver() does.
@@ -129,7 +130,7 @@ write_text(c("Reliability update (synthetic).", "",
 
 inj_store <- keep("act11_ex4_store",
                   ingest_library(inj_dir, model = EMBED_MODEL, chunk_words = 20, overlap = 5))
-inj_librarian <- agent("librarian_injected", librarian$instructions, model = LOCAL_MODEL,
+inj_librarian <- agent("librarian_injected", librarian$instructions, model = LOCAL_MODEL, effort = LOCAL_EFFORT,
                        tools = list(retrieve_tool(inj_store, k = 4)))
 
 reliability_q <- "What reliability evidence does the pilot report, and what is still open about reliability?"

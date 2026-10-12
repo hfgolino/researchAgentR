@@ -28,7 +28,9 @@
 #'   Not combined with `tools`: agents use a `final_answer` tool instead.
 #' @param max_tokens Maximum output tokens (reasoning tokens included).
 #' @param effort Reasoning effort for reasoning models (`"low"`, `"medium"`,
-#'   `"high"`); `NULL` leaves the provider default.
+#'   `"high"`); `NULL` leaves the provider default. For local models in Ollama,
+#'   `"none"` switches thinking off (much faster on a laptop; `qwen3` thinks
+#'   at length by default).
 #' @param temperature Sampling temperature; `NULL` leaves the provider default.
 #'   Claude 5.x models reject it, so it is dropped for them and the drop is
 #'   recorded in `$notes`.
@@ -64,7 +66,8 @@ chat <- function(messages, model = default_model("lead"), system = NULL, tools =
   res <- switch(info$api,
     chat = do.call(.chat_completions, args),
     responses = do.call(.responses_api, args),
-    anthropic = do.call(.anthropic_messages, args)
+    anthropic = do.call(.anthropic_messages, args),
+    ollama = do.call(.ollama_chat, args)
   )
   res$model <- m$id
   res$provider <- m$provider

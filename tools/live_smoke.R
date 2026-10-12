@@ -313,9 +313,13 @@ ol <- tryCatch(ollama_status(), error = function(e) NULL)
 if (!is.null(ol) && nrow(ol)) {
   # every pulled model that is not an embedding model
   for (m in ol$name[!grepl("embed|minilm|bge|e5", ol$name)]) {
-    check(paste0("loop_ollama_", m), run(make_counter(paste0("ollama:", m)),
-          paste0("How many words are in: '", sentence, "'?"), budget(max_steps = 6, max_seconds = 240)),
-          summary = loop_summary)
+    for (eff in c("default", "none")) {
+      a <- make_counter(paste0("ollama:", m))
+      if (eff == "none") a$effort <- "none"
+      check(paste0("loop_ollama_", m, "_think_", eff), run(a,
+            paste0("How many words are in: '", sentence, "'?"), budget(max_steps = 6, max_seconds = 240)),
+            summary = function(ep) paste(loop_summary(ep), "| seconds =", round(ep$seconds, 1)))
+    }
   }
 }
 

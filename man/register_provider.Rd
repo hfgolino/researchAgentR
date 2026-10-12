@@ -7,7 +7,7 @@
 register_provider(
   name,
   base_url,
-  api = c("chat", "responses", "anthropic"),
+  api = c("chat", "responses", "anthropic", "ollama"),
   key_env = NULL,
   local = FALSE
 )
@@ -17,7 +17,9 @@ register_provider(
 
 \item{base_url}{Base URL of the API, without the endpoint path.}
 
-\item{api}{Wire format: \code{"chat"}, \code{"responses"} or \code{"anthropic"}.}
+\item{api}{Wire format: \code{"chat"}, \code{"responses"}, \code{"anthropic"} or
+\code{"ollama"} (Ollama's own API; give the address without \verb{/v1}, or with it,
+either works).}
 
 \item{key_env}{Name of the environment variable that holds the key, or
 \code{NULL} for local servers that need no key.}

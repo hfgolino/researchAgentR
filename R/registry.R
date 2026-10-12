@@ -10,6 +10,8 @@
 #   "chat"       OpenAI-compatible Chat Completions (/chat/completions)
 #   "responses"  OpenAI Responses API (/responses)
 #   "anthropic"  Anthropic Messages API (/messages)
+#   "ollama"     Ollama's own chat API (/api/chat), which, unlike its
+#                OpenAI-compatible endpoint, can switch a model's thinking off
 .default_providers <- function() {
   data.frame(
     provider = c("groq", "openai", "anthropic", "gemini", "mistral", "cerebras",
@@ -24,7 +26,7 @@
                  "http://localhost:11434/v1",
                  "http://localhost:1234/v1"),
     api = c("chat", "responses", "anthropic", "chat", "chat", "chat", "chat",
-            "chat", "chat"),
+            "ollama", "chat"),
     key = c("groq", "openai", "anthropic", "gemini", "mistral", "cerebras",
             "openrouter", NA, NA),
     local = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE),
@@ -34,10 +36,12 @@
 
 #' List the model providers the package knows
 #'
-#' Every provider is reached by one of three adapters: OpenAI-compatible Chat
-#' Completions (`api = "chat"`), the OpenAI Responses API (`"responses"`) or
-#' the Anthropic Messages API (`"anthropic"`). Add any other
-#' OpenAI-compatible endpoint with [register_provider()].
+#' Every provider is reached by one of four adapters: OpenAI-compatible Chat
+#' Completions (`api = "chat"`), the OpenAI Responses API (`"responses"`),
+#' the Anthropic Messages API (`"anthropic"`) or Ollama's own chat API
+#' (`"ollama"`, used for local models because it can turn a model's
+#' thinking off with `effort = "none"`). Add any other OpenAI-compatible
+#' endpoint with [register_provider()].
 #'
 #' @return A data frame with one row per provider.
 #' @examples
@@ -51,7 +55,9 @@ providers <- function() {
 #'
 #' @param name Provider name, used before the colon in model strings.
 #' @param base_url Base URL of the API, without the endpoint path.
-#' @param api Wire format: `"chat"`, `"responses"` or `"anthropic"`.
+#' @param api Wire format: `"chat"`, `"responses"`, `"anthropic"` or
+#'   `"ollama"` (Ollama's own API; give the address without `/v1`, or with it,
+#'   either works).
 #' @param key_env Name of the environment variable that holds the key, or
 #'   `NULL` for local servers that need no key.
 #' @param local `TRUE` when the server runs on this computer (data stay local).
@@ -60,7 +66,7 @@ providers <- function() {
 #' register_provider("myserver", "http://localhost:8080/v1", local = TRUE)
 #' providers()
 #' @export
-register_provider <- function(name, base_url, api = c("chat", "responses", "anthropic"),
+register_provider <- function(name, base_url, api = c("chat", "responses", "anthropic", "ollama"),
                               key_env = NULL, local = FALSE) {
   api <- match.arg(api)
   p <- providers()

@@ -58,6 +58,7 @@ dir.create("results", showWarnings = FALSE)
 CLOUD_MODEL <- "groq:openai/gpt-oss-20b"   # free tier
 LOCAL_MODEL <- "ollama:qwen3:4b"           # laptops with 8 GB of RAM
 # LOCAL_MODEL <- "ollama:qwen3:8b"         # 16 GB of RAM or Apple Silicon with 16 GB
+LOCAL_EFFORT <- "none"   # qwen3 "thinks" before every answer unless told not to (Step 1)
 EMBED_MODEL <- "ollama:nomic-embed-text"   # local embeddings, free
 
 # keep() saves whatever the expression returns, including results of runs
@@ -74,9 +75,9 @@ check_network <- function(results) {
 # STEP 1: IS THE LOCAL MODEL READY?
 # ==============================================================================
 
-# Ollama (https://ollama.com) runs open-weight models on your computer and
-# offers an OpenAI-compatible endpoint, so the same agent code works with
-# "ollama:<model>" instead of "groq:<model>". Pull the models once, in a
+# Ollama (https://ollama.com) runs open-weight models on your computer, so
+# the same agent code works with "ollama:<model>" instead of "groq:<model>"
+# (the package talks to Ollama's own chat API, which can switch thinking off). Pull the models once, in a
 # terminal (not in R):
 #   ollama pull qwen3:4b            (or qwen3:8b with 16 GB of memory)
 #   ollama pull nomic-embed-text
@@ -91,6 +92,25 @@ reg[reg$provider == "ollama", c("provider", "model", "context_window", "tools", 
 # EXPECTED OUTPUT: the local models the package knows (qwen3:4b, qwen3:8b,
 # phi4-mini, gpt-oss:20b) with tool support and prices of 0. gpt-oss:20b needs
 # about 16 GB of memory or more; gpt-oss-120b (about 60 GB) is not a laptop model.
+
+
+# Thinking costs time on a laptop. qwen3 writes a long hidden reasoning before
+# every reply unless thinking is switched off (effort = "none", which the
+# package sends to Ollama as think = false). One question, both ways:
+think_q <- "In one sentence: what does Cronbach's alpha estimate?"
+think_on  <- keep("act11_think_on",  chat(think_q, model = LOCAL_MODEL, max_tokens = 4000))
+think_off <- keep("act11_think_off", chat(think_q, model = LOCAL_MODEL, effort = "none", max_tokens = 4000))
+data.frame(thinking = c("on", "off"),
+           seconds = round(c(think_on$latency, think_off$latency), 1),
+           output_tokens = c(think_on$usage$output, think_off$usage$output),
+           reasoning_chars = nchar(c(think_on$reasoning, think_off$reasoning)))
+think_off$content
+# EXPECTED OUTPUT: two rows. With thinking on, many more output tokens (the
+# reasoning) and several times the seconds; with thinking off, no reasoning
+# text and a reply in a few seconds. Agents below use effort = LOCAL_EFFORT.
+# On a laptop, thinking off is usually the difference between an agent that
+# finishes and one that times out; whether it costs accuracy is measured in
+# Step 4, not assumed.
 
 
 # ==============================================================================
@@ -145,10 +165,11 @@ res_cloud
 # ==============================================================================
 
 # Only the model string changes.
-local_finder <- agent("finder", finder_instructions, model = LOCAL_MODEL, tools = wide_tools)
+local_finder <- agent("finder", finder_instructions, model = LOCAL_MODEL, tools = wide_tools,
+                      effort = LOCAL_EFFORT)
 
 old_cache <- use_cache("off")
-res_local <- keep("act11_eval_local",
+res_local <- keep("act11_eval_local_nothink",
   run_eval(local_finder, small_tasks, trials = 3, budget = serve_budget,
            name = "local, 5 tools"))
 use_cache(old_cache)
@@ -194,7 +215,7 @@ answer_schema <- list(                                                     # (b)
 harness_finder <- agent("finder_harness",
   paste(finder_instructions, "Search Crossref with the article title. Copy DOIs and titles",
         "exactly as the search result gives them."),
-  model = LOCAL_MODEL, tools = lean_tools, output_schema = answer_schema)
+  model = LOCAL_MODEL, tools = lean_tools, output_schema = answer_schema, effort = LOCAL_EFFORT)
 harness_finder
 
 # The title in the task, between double quotes
@@ -238,7 +259,7 @@ harness_solver <- function(task, agent = harness_finder, budget = serve_budget) 
 }
 
 old_cache <- use_cache("off")
-res_harness <- keep("act11_eval_local_harness",
+res_harness <- keep("act11_eval_local_harness_nothink",
   run_eval(harness_solver, small_tasks, trials = 3, name = "local + harness"))
 use_cache(old_cache)
 check_network(res_harness)
@@ -432,7 +453,7 @@ librarian <- agent("librarian",
   paste("You answer questions from the user's document library only, using the retrieve",
         "tool. After every claim, cite the passage as [file, section]. If the passages do",
         "not answer the question, say 'not found in the library'. Do not use outside knowledge."),
-  model = LOCAL_MODEL, tools = list(retrieve_tool(lib, k = 4)))
+  model = LOCAL_MODEL, tools = list(retrieve_tool(lib, k = 4)), effort = LOCAL_EFFORT)
 librarian
 # EXPECTED OUTPUT: <agent> librarian | ollama:qwen3:4b, tool retrieve.
 

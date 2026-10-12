@@ -243,6 +243,71 @@
   out
 }
 
+# ---- 4. Ollama's own chat API -----------------------------------------------
+# Local models. Ollama's OpenAI-compatible endpoint cannot turn thinking off,
+# and a thinking model such as qwen3 can spend minutes per call on a laptop;
+# /api/chat takes `think`. Request and reply fields:
+# https://docs.ollama.com/api/chat (tools, format, think, options.num_predict;
+# reply message$content, $thinking, $tool_calls, prompt_eval_count, eval_count).
+
+.ollama_chat <- function(m, info, messages, tools, output_schema, max_tokens,
+                         effort, temperature, extra) {
+  host <- sub("/v1/?$", "", info$base_url)
+  body <- list(model = m$model, messages = .to_ollama_messages(messages), stream = FALSE,
+               options = list(num_predict = max_tokens))
+  if (!is.null(temperature)) body$options$temperature <- temperature
+  if (!is.null(effort)) {
+    # FALSE turns thinking off; gpt-oss takes a level; other models TRUE/FALSE
+    body$think <- if (effort %in% c("none", "off")) FALSE else
+      if (grepl("gpt-oss", m$model) && effort %in% c("low", "medium", "high")) effort else TRUE
+  }
+  if (length(tools)) {
+    t <- .split_tools(tools)
+    body$tools <- lapply(t$functions, function(x) list(type = "function", `function` = list(
+      name = x$name, description = x$description, parameters = x$schema)))
+  }
+  if (!is.null(output_schema)) body$format <- output_schema
+  body <- utils::modifyList(body, extra)
+  req <- .request(paste0(host, "/api/chat"), body = body, auth = "none", realm = m$provider,
+                  rpm = .opt(paste0("rpm.", m$provider)), timeout = .opt("local_timeout", 600))
+  r <- .perform(req)
+  msg <- r$body$message %||% list()
+  calls <- lapply(seq_along(msg$tool_calls %||% list()), function(i) {
+    tc <- msg$tool_calls[[i]]
+    args <- tc$`function`$arguments
+    raw <- if (is.character(args)) args else .json_args(args %||% list())
+    .tool_call(tc$id %||% paste0("call_", i), tc$`function`$name, raw)
+  })
+  list(
+    content = msg$content %||% "", tool_calls = calls, reasoning = msg$thinking %||% "",
+    native = msg, native_api = "ollama",
+    usage = .usage(input = r$body$prompt_eval_count, output = r$body$eval_count),
+    latency = r$latency, stop_reason = r$body$done_reason %||% "",
+    cached = r$cached, headers = r$headers, executed_tools = list(), notes = character(0)
+  )
+}
+
+# Ollama messages: tool results name their tool; assistant turns carry their
+# tool calls (arguments as objects) and their thinking, which gpt-oss needs
+# back in later tool-call requests.
+.to_ollama_messages <- function(messages) {
+  lapply(messages, function(x) {
+    switch(x$role,
+      system = list(role = "system", content = x$content),
+      user = list(role = "user", content = x$content),
+      tool = list(role = "tool", content = x$content, tool_name = x$name %||% ""),
+      assistant = {
+        out <- list(role = "assistant", content = x$content %||% "")
+        if (nzchar(x$reasoning %||% "")) out$thinking <- x$reasoning
+        if (length(x$tool_calls)) {
+          out$tool_calls <- lapply(x$tool_calls, function(tc) list(`function` = list(
+            name = tc$name, arguments = if (length(tc$arguments)) tc$arguments else .empty_object())))
+        }
+        out
+      })
+  })
+}
+
 #' List the models a provider offers right now
 #'
 #' Calls the provider's model-listing endpoint, the reliable way to check
