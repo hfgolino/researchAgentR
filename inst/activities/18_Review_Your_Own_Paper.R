@@ -152,7 +152,7 @@ as.data.frame(checks2)[grepl("overclaim", checks2$suggestion), c("id", "severity
 
 # The teaching manuscript has an answer key: one row per planted error, with
 # a regular expression that a review row must match to count as "found".
-key <- read.csv(answer_key_file, stringsAsFactors = FALSE)
+key <- read.csv(answer_key_file, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
 key[, c("id", "type", "location")]
 
 recall_table <- function(review, key) {
@@ -298,8 +298,8 @@ fixed$changes[, c("id", "status", "line")]
 
 # The original copy is unchanged; only the revised file differs.
 identical(unname(tools::md5sum(my_copy)), md5_before)
-sum(grepl("delve", readLines(my_copy)))
-sum(grepl("delve", readLines("review_work/manuscript_revised.md")))
+sum(grepl("delve", read_text(my_copy)))
+sum(grepl("delve", read_text("review_work/manuscript_revised.md")))
 
 # EXPECTED OUTPUT (computed offline): the two quotes; then "2 of 2 accepted
 # suggestion(s) applied; original unchanged." and "2 applied, 0 skipped",

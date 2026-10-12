@@ -13,7 +13,7 @@
 # instead of paying again, and the folder can later serve the class demos.
 # The date in system prompts is pinned (activity_cache/TODAY.txt) so that the
 # recordings replay on other days: in class, set the same date with
-#   options(researchAgentR.today = readLines("activity_cache/TODAY.txt"))
+#   options(researchAgentR.today = readLines("activity_cache/TODAY.txt", encoding = "UTF-8"))
 #
 # Output: live_logs/activities-<timestamp>/<script>.txt and summary.csv
 
@@ -25,7 +25,7 @@ cache <- file.path(root, "activity_cache")
 dir.create(cache, showWarnings = FALSE)
 today_file <- file.path(cache, "TODAY.txt")
 if (!file.exists(today_file)) writeLines(format(Sys.Date()), today_file)
-today <- readLines(today_file, warn = FALSE)[1]
+today <- readLines(today_file, warn = FALSE, encoding = "UTF-8")[1]
 
 src <- file.path(root, "researchAgentR", "inst", "activities")
 scripts <- sort(list.files(src, pattern = "^[0-9]{2}[a-z]?_.*\\.R$"))
@@ -90,7 +90,7 @@ for (s in scripts) {
   status <- system2(rscript, c(shQuote(child_file), shQuote(file.path(src, s)), shQuote(cache), shQuote(today)),
                     stdout = log, stderr = log, timeout = 45 * 60)
   setwd(owd)
-  txt <- readLines(log, warn = FALSE)
+  txt <- readLines(log, warn = FALSE, encoding = "UTF-8")
   sm <- regmatches(txt, regexpr("@@SUMMARY.*", txt))
   num <- function(key) {
     v <- regmatches(sm, regexpr(paste0(key, "=[^ ]+"), sm))
@@ -101,7 +101,7 @@ for (s in scripts) {
                     model_cost = num("model_cost"), live_model_calls = num("live_model_calls"),
                     unpriced_calls = num("unpriced_calls"))
   rows[[s]] <- row
-  write.csv(do.call(rbind, rows), file.path(out_dir, "summary.csv"), row.names = FALSE)
+  write.csv(do.call(rbind, rows), file.path(out_dir, "summary.csv"), row.names = FALSE, fileEncoding = "UTF-8")
   cat(sprintf("exit %s | errors %s | %4.0f s | model $%s\n", status, row$errors, row$seconds,
               format(row$model_cost, digits = 3)))
 }

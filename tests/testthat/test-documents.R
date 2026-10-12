@@ -119,3 +119,15 @@ test_that("read_documents explains bad paths and file types", {
   d <- tempfile(); dir.create(d)
   expect_equal(nrow(read_documents(d)), 0)
 })
+
+test_that("text is written and read as UTF-8, with a Latin-1 fallback", {
+  f <- tempfile(fileext = ".txt")
+  s <- c(intToUtf8(c(67, 97, 102, 233)), paste0(intToUtf8(945), " = .91"))
+  write_text(s, f)
+  expect_equal(readBin(f, "raw", 5), as.raw(c(0x43, 0x61, 0x66, 0xc3, 0xa9)))
+  write_text("more", f, append = TRUE)
+  expect_equal(read_text(f), c(s, "more"))
+  g <- tempfile(fileext = ".txt")
+  writeBin(as.raw(c(0x43, 0x61, 0x66, 0xe9, 0x0a)), g)   # "Cafe" with e-acute in Latin-1
+  expect_equal(read_text(g), intToUtf8(c(67, 97, 102, 233)))
+})

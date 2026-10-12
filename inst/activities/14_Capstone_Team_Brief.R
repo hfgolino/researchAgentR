@@ -410,7 +410,7 @@ copy_template <- function(name) {
 checklist <- copy_template("agent_verification_checklist")
 template  <- copy_template("ai_use_statement")
 rubric    <- copy_template("capstone_rubric")
-cat(readLines(rubric), sep = "\n")
+cat(read_text(rubric), sep = "\n")
 # EXPECTED OUTPUT: the capstone rubric (8 criteria scored 0 to 3, maximum 24
 # points). Fill in the checklist and the rubric in capstone/ as a team.
 
@@ -436,7 +436,7 @@ brief_md <- c(
   "## Episode cost ledger", "",
   sprintf("Team total (lead episode, workers included): US$%.5f at list price.", team_total),
   sprintf("Claim checks (outside the team): US$%.5f.", attr(claim_check, "cost")))
-writeLines(brief_md, file.path(OUT_DIR, "brief.md"))
+write_text(brief_md, file.path(OUT_DIR, "brief.md"))
 list.files(OUT_DIR)
 # EXPECTED OUTPUT: the files of the capstone folder: brief.md,
 # claim_evidence_table.csv, appendix_ai_use.md, team_episodes.html, the

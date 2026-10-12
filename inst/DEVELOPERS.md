@@ -106,3 +106,14 @@ Exported core:
 - Research search functions return data frames with at least `title`,
   `year`, `doi`, `authors` (one string, "Last, F.; Last, F."), `source`,
   `abstract` (may be NA), `oa_url` (may be NA), `id`, `database`.
+
+## Text encoding
+
+Every text file the package writes is UTF-8, and every text file it reads is
+read as UTF-8: use `write_text()` / `read_text()` (never bare `writeLines()`,
+`readLines()` or `cat(file =)`), `save_table()` for tables people open in a
+spreadsheet (UTF-8 with a byte-order mark), and `fileEncoding = "UTF-8"` in
+any `read.csv()` / `write.csv()`. Code run by `run_r_code()` starts with
+`options(encoding = "UTF-8")`. Non-ASCII characters in R source are written
+as `\uXXXX` escapes or built with `intToUtf8()`, so the code also works in
+non-UTF-8 locales.

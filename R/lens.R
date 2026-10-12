@@ -376,7 +376,7 @@
 }
 
 .write_html <- function(html, file, open) {
-  writeLines(enc2utf8(html), file, useBytes = TRUE)
+  write_text(html, file, encoding = "UTF-8")
   if (isTRUE(open)) utils::browseURL(normalizePath(file))
   invisible(file)
 }

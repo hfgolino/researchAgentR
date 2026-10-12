@@ -20,11 +20,11 @@ ex1_root <- file.path(tempdir(), "exercise1")
 ex1 <- file.path(ex1_root, "claude-methods-helper")   # folder name = skill name
 dir.create(ex1, recursive = TRUE, showWarnings = FALSE)
 file.copy(file.path(example_skill, "references"), ex1, recursive = TRUE)
-md <- readLines(file.path(example_skill, "SKILL.md"))
+md <- read_text(file.path(example_skill, "SKILL.md"))
 md <- sub("^name: summarizing-methods$", "name: claude-methods-helper", md)
 md <- sub("^description: Summarizes the methods section",
           "description: Summarizes the <b>methods</b> section", md)
-writeLines(md, file.path(ex1, "SKILL.md"))
+write_text(md, file.path(ex1, "SKILL.md"))
 
 chk1 <- validate_skill(ex1)
 chk1
@@ -95,7 +95,7 @@ strict_grader(wrong_ci, as.list(apa_tasks_ci[1, ]))$reason
 
 prereg <- file.path(skills_dir, "writing-preregistration-hypotheses")
 dir.create(prereg, recursive = TRUE, showWarnings = FALSE)
-writeLines(c(
+write_text(c(
   "---",
   "name: writing-preregistration-hypotheses",
   "description: \"Turns a research question into numbered, directional and testable hypotheses, each with the planned statistical test and the result that would count against it. Use when the user drafts a preregistration or asks for hypotheses.\"",

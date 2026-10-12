@@ -16,7 +16,7 @@ stopifnot(packageVersion("researchAgentR") >= "0.1.0")
 # ==============================================================================
 
 # The source: the capstone rubric that ships with the package (real text)
-rubric_text <- paste(readLines(course_template("capstone_rubric")), collapse = " ")
+rubric_text <- paste(read_text(course_template("capstone_rubric")), collapse = " ")
 rubric_claims <- data.frame(
   claim = c("The capstone rubric has a maximum of 24 points.",
             "The capstone rubric has a maximum of 30 points.",

@@ -28,7 +28,7 @@
 notes_write <- function(text, file, section = NULL) {
   dir.create(dirname(file), showWarnings = FALSE, recursive = TRUE)
   heading <- paste0("## ", section %||% "Note", " (", format(Sys.time(), "%Y-%m-%d %H:%M"), ")")
-  cat(heading, "\n\n", paste(text, collapse = "\n"), "\n\n", file = file, append = TRUE, sep = "")
+  write_text(c(heading, "", text, ""), file, append = TRUE, encoding = "UTF-8")
   invisible(file)
 }
 
@@ -36,7 +36,7 @@ notes_write <- function(text, file, section = NULL) {
 #' @export
 notes_read <- function(file) {
   if (!file.exists(file)) return("")
-  trimws(paste(readLines(file, warn = FALSE, encoding = "UTF-8"), collapse = "\n"))
+  trimws(paste(read_text(file, encoding = "UTF-8"), collapse = "\n"))
 }
 
 #' Tools that let an agent keep notes

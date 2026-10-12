@@ -85,13 +85,13 @@ SCREENING_FILE <- "data/screening.csv"
 
 if (!file.exists(SCREENING_FILE)) {
   ids <- read.csv(system.file("extdata", "synergy", "Oud_2018_ids.csv", package = "researchAgentR"),
-                  stringsAsFactors = FALSE)
+                  stringsAsFactors = FALSE, fileEncoding = "UTF-8")
   works <- keep("screen12_oud2018_works", get_works(ids$openalex_id))   # 20 OpenAlex list calls
   screening_all <- data.frame(id = ids$openalex_id, title = works$title, abstract = works$abstract,
                               label = ids$label_included, stringsAsFactors = FALSE)
   screening_all <- screening_all[works$found, ]   # count what OpenAlex no longer has
   dir.create("data", showWarnings = FALSE)
-  write.csv(screening_all, SCREENING_FILE, row.names = FALSE)
+  write.csv(screening_all, SCREENING_FILE, row.names = FALSE, fileEncoding = "UTF-8")
 }
 # EXPECTED OUTPUT: the first time, a message if some works were not found;
 # data/screening.csv then exists and later runs read it directly.
@@ -129,7 +129,7 @@ SAMPLE_N <- 60       # records screened in this activity (free-tier friendly)
 # STEP 1: READ AND CHECK THE DATA, THEN DRAW THE SAMPLE
 # ==============================================================================
 
-screening <- read.csv(SCREENING_FILE, stringsAsFactors = FALSE)
+screening <- read.csv(SCREENING_FILE, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
 stopifnot(all(c("id", "title", "abstract", "label") %in% names(screening)),
           all(screening$label %in% c(0, 1)))
 cat(sprintf("%d records, %d includes (%.1f%%), %d without an abstract\n",

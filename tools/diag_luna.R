@@ -80,7 +80,7 @@ for (v in names(variants)) {
       rows[[id]] <- data.frame(variant = v, try = k, answer = ans, correct = isTRUE(ans == 11L),
                                early_final = early, stop = substr(ep$stop_reason, 1, 200))
     }
-    write.csv(do.call(rbind, rows), file.path(out_dir, "diag.csv"), row.names = FALSE)
+    write.csv(do.call(rbind, rows), file.path(out_dir, "diag.csv"), row.names = FALSE, fileEncoding = "UTF-8")
     cat(sprintf("%-20s try %d: answer %s\n", v, k, rows[[id]]$answer))
   }
 }

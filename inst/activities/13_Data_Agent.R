@@ -136,9 +136,9 @@ world_bank <- function(country, indicator, years) {
   name <- gsub("[^A-Za-z0-9]+", "_", paste(indicator, country, years))
   d <- keep(paste0("wb_", name), wb_indicator(country, indicator, years))
   file <- paste0(name, ".csv")
-  utils::write.csv(d, file.path(work_dir, file), row.names = FALSE)
+  utils::write.csv(d, file.path(work_dir, file), row.names = FALSE, fileEncoding = "UTF-8")
   paste0("Saved ", nrow(d), " rows to '", file, "' in the run_r working folder ",
-         "(read it with read.csv('", file, "')). Columns: ", paste(names(d), collapse = ", "),
+         "(read it with read.csv('", file, "', fileEncoding = 'UTF-8')). Columns: ", paste(names(d), collapse = ", "),
          ". Indicator: ", d$indicator_name[1], ". Countries: ", paste(unique(d$iso3), collapse = ", "),
          ". Years: ", min(d$year), " to ", max(d$year), ". Missing values: ", attr(d, "missing"),
          ". Source: ", attr(d, "source"), ", last updated ", attr(d, "lastupdated"), ".")
@@ -191,7 +191,7 @@ r_tool <- tool_run_r(dir = work_dir, timeout = 60, allow_network = FALSE)
 # Try the sandbox directly on the file from STEP 2 (if it was saved):
 csv_files <- list.files(work_dir, pattern = "\\.csv$")
 if (length(csv_files)) {
-  print(run_r_code(paste0("d <- read.csv('", csv_files[1], "')\n",
+  print(run_r_code(paste0("d <- read.csv('", csv_files[1], "', fileEncoding = 'UTF-8')\n",
                           "summary(d$value)\nnrow(d)"), dir = work_dir))
 }
 # EXPECTED OUTPUT: summary statistics of the value column and the number of rows.
@@ -218,7 +218,7 @@ data_agent <- agent(
   description = "Retrieves World Bank indicators and analyzes them with R.",
   instructions = paste(
     "You answer quantitative questions with World Bank data. First call world_bank to save",
-    "the data as a CSV file; then write R code that reads the file with read.csv() and",
+    "the data as a CSV file; then write R code that reads the file with read.csv(file, fileEncoding = 'UTF-8') and",
     "prints every result you need, and run it with run_r. Never state a number that R did",
     "not print, and never type data values into code. Keep missing values as NA and report",
     "how many there are. The final r_code must reproduce all the numbers on its own."),
@@ -254,7 +254,7 @@ numbers
 # invented a number: compare by hand and report it.
 
 # An independent check in your own session (no model involved):
-le <- read.csv(file.path(work_dir, unlist(ans$data_files)[1]))
+le <- read.csv(file.path(work_dir, unlist(ans$data_files)[1]), fileEncoding = "UTF-8")
 le_wide <- reshape(le[le$year %in% c(2015, 2023), c("iso3", "year", "value")],
                    idvar = "iso3", timevar = "year", direction = "wide")
 le_wide$change <- le_wide$value.2023 - le_wide$value.2015
@@ -273,10 +273,10 @@ le_wide
 # language model, so sending its printed output to a cloud model is fine.
 data(extraversion, package = "researchAgentR")
 write.csv(extraversion[, c("doc_id", "subtopic", "text")],
-          file.path(work_dir, "extraversion.csv"), row.names = FALSE)
+          file.path(work_dir, "extraversion.csv"), row.names = FALSE, fileEncoding = "UTF-8")
 
 # The sandbox alone, offline:
-run_r_code("d <- read.csv('extraversion.csv')\ntable(d$subtopic)", dir = work_dir)
+run_r_code("d <- read.csv('extraversion.csv', fileEncoding = 'UTF-8')\ntable(d$subtopic)", dir = work_dir)
 # EXPECTED OUTPUT: the number of texts per subtopic (Assertive, Energetic,
 # Friendly, Positive).
 

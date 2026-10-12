@@ -68,7 +68,7 @@ docs <- read_documents(corpus_dir)
 str(docs)
 table(docs$file)
 head(docs[, c("file", "section", "paragraph")])
-cat(readLines(file.path(corpus_dir, "04_discussion.md"), n = 4), sep = "\n")
+cat(read_text(file.path(corpus_dir, "04_discussion.md"), n = 4), sep = "\n")
 
 # EXPECTED OUTPUT (computed offline): a data frame of 83 paragraphs with
 # columns file, section, paragraph and text; 6 in the introduction, 56 in
@@ -249,7 +249,7 @@ style_check <- style_to_skill(my_style, "writing-like-dynega-paper", dir = "skil
                               overwrite = TRUE)
 style_check
 validate_skill(attr(style_check, "path"))
-cat(readLines(file.path(attr(style_check, "path"), "SKILL.md"), n = 30), sep = "\n")
+cat(read_text(file.path(attr(style_check, "path"), "SKILL.md"), n = 30), sep = "\n")
 
 # EXPECTED OUTPUT: "Valid skill." The SKILL.md has a third-person description
 # ("Writes and revises academic prose in the style of ... Use when ..."), a
@@ -368,7 +368,7 @@ my_style$date
 my_style$sources
 my_style$cost
 attr(rewritten, "model")
-#   The template: readLines(course_template("ai_use_statement"))
+#   The template: read_text(course_template("ai_use_statement"))
 # - Never present text written with write_in_style() as unassisted writing.
 #   Every claim, number and citation remains the author's responsibility.
 

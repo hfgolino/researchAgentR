@@ -76,7 +76,7 @@
 
 # Read a SKILL.md file into its frontmatter fields and Markdown body.
 .read_skill_md <- function(file) {
-  lines <- readLines(file, warn = FALSE, encoding = "UTF-8")
+  lines <- read_text(file, encoding = "UTF-8")
   if (!length(lines) || trimws(lines[1]) != "---") {
     return(list(fields = list(), body = lines, errors = "SKILL.md does not start with a `---` line"))
   }
@@ -110,11 +110,11 @@
     fm <- c(fm, "metadata:", paste0("  ", names(metadata), ": ", .yaml_quote(unlist(metadata))))
   }
   fm <- c(fm, "---", "")
-  writeLines(enc2utf8(c(fm, body)), file.path(path, "SKILL.md"), useBytes = TRUE)
+  write_text(c(fm, body), file.path(path, "SKILL.md"), encoding = "UTF-8")
   if (length(references)) {
     dir.create(file.path(path, "references"), showWarnings = FALSE)
     for (f in names(references)) {
-      writeLines(enc2utf8(references[[f]]), file.path(path, "references", f), useBytes = TRUE)
+      write_text(references[[f]], file.path(path, "references", f), encoding = "UTF-8")
     }
   }
   if (length(scripts)) {
@@ -261,13 +261,13 @@ validate_skill <- function(path) {
   files <- list.files(path, recursive = TRUE)
   text_files <- setdiff(files[grepl("\\.(md|txt)$", files, ignore.case = TRUE)], "SKILL.md")
   nested <- text_files[vapply(text_files, function(tf) {
-    links <- .local_links(readLines(file.path(path, tf), warn = FALSE))
+    links <- .local_links(read_text(file.path(path, tf), encoding = "UTF-8"))
     any(grepl("\\.(md|txt)$", links, ignore.case = TRUE))
   }, logical(1))]
   add("references one level deep", "recommended", !length(nested),
       if (length(nested)) paste("these files link to further files:", paste(nested, collapse = ", ")) else "")
   no_toc <- text_files[vapply(text_files, function(tf) {
-    l <- readLines(file.path(path, tf), warn = FALSE)
+    l <- read_text(file.path(path, tf), encoding = "UTF-8")
     length(l) > 100 && !any(grepl("^#+\\s*(table of )?contents\\b", utils::head(l, 40), ignore.case = TRUE)) &&
       sum(grepl("\\]\\(#", utils::head(l, 40))) < 3
   }, logical(1))]
@@ -384,7 +384,7 @@ use_skills <- function(agent, dir) {
     if (!startsWith(target, paste0(root, "/")) || !file.exists(target)) {
       stop("No file '", file, "' in skill '", name, "'.")
     }
-    paste(readLines(target, warn = FALSE), collapse = "\n")
+    paste(read_text(target, encoding = "UTF-8"), collapse = "\n")
   }
   tools <- list(
     define_tool(load_skill, "Load the instructions of a skill. Call it before a task that matches the skill's description.",
@@ -471,7 +471,7 @@ create_skill <- function(description, examples = NULL, name = NULL, dir = ".",
   script_text <- if (length(scripts)) paste0(
     "\n\nBundled scripts (in scripts/; say when to run each one and what it returns):\n",
     paste0("scripts/", basename(scripts), ":\n",
-           vapply(scripts, function(s) .shorten(paste(readLines(s, warn = FALSE), collapse = "\n"), 1500),
+           vapply(scripts, function(s) .shorten(paste(read_text(s, encoding = "UTF-8"), collapse = "\n"), 1500),
                   character(1)), collapse = "\n\n")) else ""
   system <- paste(
     "You write Agent Skills: a name, a description and Markdown instructions for another model.",

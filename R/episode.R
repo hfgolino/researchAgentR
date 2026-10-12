@@ -210,14 +210,14 @@ save_episode <- function(episode, file = NULL, dir = "episodes", children = TRUE
     kids <- .with_children(list(episode))[-1]
     if (length(kids)) out$sub_episodes <- lapply(kids, unclass)
   }
-  writeLines(jsonlite::prettify(.to_json(out)), file, useBytes = TRUE)
+  write_text(jsonlite::prettify(.to_json(out)), file, encoding = "UTF-8")
   invisible(file)
 }
 
 #' @rdname save_episode
 #' @export
 read_episode <- function(file) {
-  x <- .from_json(paste(readLines(file, warn = FALSE, encoding = "UTF-8"), collapse = "\n"))
+  x <- .from_json(paste(read_text(file, encoding = "UTF-8"), collapse = "\n"))
   # sub-episodes saved with the lead become available to sub_episodes(),
   # view_episode(), cost_ledger() and ai_use_statement() again
   for (k in x$sub_episodes %||% list()) .register_sub_episode(.fix_episode(k), k$called_as_tool %||% NA_character_)

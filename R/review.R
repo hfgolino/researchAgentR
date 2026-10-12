@@ -392,7 +392,7 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
 .check_labels <- function(files) {
   rows <- list()
   for (f in files[grepl("\\.(Rmd|qmd|md|tex)$", files, ignore.case = TRUE)]) {
-    txt <- paste(readLines(f, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+    txt <- paste(read_text(f, encoding = "UTF-8"), collapse = "\n")
     grab <- function(pattern) {
       m <- regmatches(txt, gregexpr(pattern, txt, perl = TRUE))[[1]]
       sub(pattern, "\\1", m, perl = TRUE)
@@ -427,7 +427,7 @@ default_style_rules <- function(em_dash = TRUE, first_person_plural = TRUE,
     "Code not run: run_r_code() from the code module is not available.")))
   rows <- list()
   for (f in files) {
-    lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+    lines <- read_text(f, encoding = "UTF-8")
     code <- if (grepl("\\.R$", f, ignore.case = TRUE)) lines else .r_chunks(lines)
     if (!length(code)) next
     res <- tryCatch(runner(paste(code, collapse = "\n")), error = function(e) e)
@@ -573,7 +573,7 @@ review_manuscript <- function(path, focus = c("argument", "clarity", "structure"
 
   # Stage 2: one reviewer call per section chunk.
   if (!is.null(guidelines) && length(guidelines) == 1 && file.exists(guidelines)) {
-    guidelines <- paste(readLines(guidelines, warn = FALSE), collapse = "\n")
+    guidelines <- paste(read_text(guidelines, encoding = "UTF-8"), collapse = "\n")
   }
   guide <- if (inherits(style, "writing_style")) style$guide else style
   system <- paste0(
@@ -836,7 +836,7 @@ review_report <- function(review, file = "review.html") {
     "<p class=\"meta\">Suggestions from a model are proposals to check, not findings. Use this review for your own work only.</p>",
     "<table><thead><tr><th>#</th><th>Severity</th><th>Category</th><th>Source</th><th>Where</th><th>Suggestion</th></tr></thead><tbody>",
     rows, "</tbody></table></body></html>")
-  writeLines(enc2utf8(html), file, useBytes = TRUE)
+  write_text(html, file, encoding = "UTF-8")
   .msg("Report written to ", file)
   invisible(file)
 }
@@ -901,7 +901,7 @@ apply_revisions <- function(review, path, accept, out = NULL, overwrite = FALSE)
   changes <- list()
   written <- character(0)
   for (tf in unique(stats::na.omit(rows$target))) {
-    lines <- readLines(tf, warn = FALSE, encoding = "UTF-8")
+    lines <- read_text(tf, encoding = "UTF-8")
     text <- paste(lines, collapse = "\n")
     applied <- 0
     for (i in which(rows$target == tf)) {
@@ -932,7 +932,7 @@ apply_revisions <- function(review, path, accept, out = NULL, overwrite = FALSE)
     } else out %||% sub("(\\.[^.]+)$", "_revised\\1", path)
     if (normalizePath(dest, mustWork = FALSE) == normalizePath(tf)) .stop("`out` must differ from the original file.")
     if (file.exists(dest) && !overwrite) .stop("The file ", dest, " exists. Use overwrite = TRUE or another `out`.")
-    writeLines(enc2utf8(strsplit(text, "\n", fixed = TRUE)[[1]]), dest, useBytes = TRUE)
+    write_text(strsplit(text, "\n", fixed = TRUE)[[1]], dest, encoding = "UTF-8")
     written <- c(written, dest)
   }
   for (i in which(is.na(rows$target))) {

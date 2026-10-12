@@ -39,6 +39,8 @@
 # session without its environment, so it uses only base R and `pkg::` calls.
 .run_in_child <- function(code, packages, dir) {
   setwd(dir)
+  # files written and read by the code default to UTF-8 on every system
+  options(encoding = "UTF-8")
   warnings <- character(0)
   messages <- character(0)
   error <- NA_character_

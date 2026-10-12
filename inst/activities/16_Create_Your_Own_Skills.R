@@ -59,7 +59,7 @@ example_skill  <- file.path(example_skills, "summarizing-methods")
 # ==============================================================================
 
 list.files(example_skill, recursive = TRUE)
-cat(readLines(file.path(example_skill, "SKILL.md")), sep = "\n")
+cat(read_text(file.path(example_skill, "SKILL.md")), sep = "\n")
 
 # EXPECTED OUTPUT: two files, "SKILL.md" and "references/checklist.md". The
 # SKILL.md starts with a block between two "---" lines holding `name`,
@@ -209,7 +209,7 @@ attr(apa_check, "cost")
 # the description), and the cost of the single call in US dollars.
 
 apa_path <- attr(apa_check, "path")
-cat(readLines(file.path(apa_path, "SKILL.md")), sep = "\n")
+cat(read_text(file.path(apa_path, "SKILL.md")), sep = "\n")
 list.files(apa_path, recursive = TRUE)
 
 # EXPECTED OUTPUT: the header (name: checking-apa-statistics, a third-person
@@ -235,9 +235,9 @@ broken_dir <- file.path(tempdir(), "broken_skills")
 dir.create(broken_dir, showWarnings = FALSE)
 file.copy(example_skill, broken_dir, recursive = TRUE)
 broken_md <- file.path(broken_dir, "summarizing-methods", "SKILL.md")
-x <- readLines(broken_md)
+x <- read_text(broken_md)
 x <- sub("^name: summarizing-methods$", "name: Summarizing_Methods", x)
-writeLines(x, broken_md)
+write_text(x, broken_md)
 
 chk <- validate_skill(file.path(broken_dir, "summarizing-methods"))
 chk
@@ -330,9 +330,9 @@ scripted <- file.path(tempdir(), "scripted_skills")
 dir.create(scripted, showWarnings = FALSE)
 file.copy(example_skill, scripted, recursive = TRUE)
 dir.create(file.path(scripted, "summarizing-methods", "scripts"))
-writeLines(c("# Count the words of each paragraph in a text file.",
+write_text(c("# Count the words of each paragraph in a text file.",
              "args <- commandArgs(trailingOnly = TRUE)",
-             "x <- readLines(args[1])",
+             "x <- readLines(args[1], encoding = \"UTF-8\")",
              "print(lengths(strsplit(x[nzchar(x)], '\\\\s+')))"),
            file.path(scripted, "summarizing-methods", "scripts", "count_words.R"))
 chk2 <- validate_skill(file.path(scripted, "summarizing-methods"))
@@ -344,7 +344,7 @@ attr(chk2, "scripts")
 # scripts/count_words.R"; then "scripts/count_words.R".
 
 # Read every script before anything runs it:
-cat(readLines(file.path(scripted, "summarizing-methods", "scripts", "count_words.R")), sep = "\n")
+cat(read_text(file.path(scripted, "summarizing-methods", "scripts", "count_words.R")), sep = "\n")
 
 # If code from a skill must run, run it with run_r_code(): a separate R
 # process with a time limit, its own temporary folder and no network by

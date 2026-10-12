@@ -58,7 +58,7 @@
           "context module (PDF support). Plain-text formats work without it.")
   }
   out <- lapply(files, function(f) {
-    lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+    lines <- read_text(f, encoding = "UTF-8")
     # Drop a YAML header and fenced code chunks: they are not prose.
     if (length(lines) && trimws(lines[1]) == "---") {
       end <- which(trimws(lines[-1]) %in% c("---", "..."))[1]

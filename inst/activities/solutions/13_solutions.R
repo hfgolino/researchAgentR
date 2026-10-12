@@ -18,10 +18,10 @@ use_cache("auto")
 
 gdp <- keep("wb_NY_GDP_PCAP_CD_BRA_IND_ZAF_2010_2023",
             wb_indicator("BRA;IND;ZAF", "NY.GDP.PCAP.CD", "2010:2023"))
-write.csv(gdp, file.path(work_dir, "gdp.csv"), row.names = FALSE)
+write.csv(gdp, file.path(work_dir, "gdp.csv"), row.names = FALSE, fileEncoding = "UTF-8")
 
 plot_code <- "
-d <- read.csv('gdp.csv')
+d <- read.csv('gdp.csv', fileEncoding = 'UTF-8')
 png('gdp.png', width = 800, height = 500)
 plot(NA, xlim = range(d$year), ylim = range(d$value, na.rm = TRUE),
      xlab = 'Year', ylab = 'GDP per capita (current US$)')
@@ -54,7 +54,7 @@ ep2
 cat(ep2$answer$answer, "\n")
 
 files <- unlist(ep2$answer$data_files)
-both <- do.call(rbind, lapply(file.path(work_dir, files), read.csv))
+both <- do.call(rbind, lapply(file.path(work_dir, files), read.csv, fileEncoding = "UTF-8"))
 both <- both[both$year == 2022, c("iso3", "indicator", "value")]
 wide <- reshape(both, idvar = "iso3", timevar = "indicator", direction = "wide")
 wide

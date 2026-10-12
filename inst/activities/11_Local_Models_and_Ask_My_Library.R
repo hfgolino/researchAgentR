@@ -286,7 +286,7 @@ list.files(LIBRARY_DIR)
 # Everything in it is invented for practice.
 toy_dir <- "toy_library"
 dir.create(toy_dir, showWarnings = FALSE)
-writeLines(c("---", "title: Pilot study notes (synthetic)", "---", "",
+write_text(c("---", "title: Pilot study notes (synthetic)", "---", "",
   "# Method", "",
   "Participants were 120 undergraduate students who completed a 10-item grit scale online.", "",
   "The scale was scored on a five-point response format.", "",
@@ -296,7 +296,7 @@ writeLines(c("---", "title: Pilot study notes (synthetic)", "---", "",
   "# Limitations", "",
   "The sample was small and came from a single university."),
   file.path(toy_dir, "pilot_notes.md"))
-writeLines(c("Lab meeting, 3 October (synthetic).", "",
+write_text(c("Lab meeting, 3 October (synthetic).", "",
   "Decision: preregister the replication before data collection.", "",
   "Open question: which reliability coefficient to report for ordinal items."),
   file.path(toy_dir, "lab_meeting.txt"))

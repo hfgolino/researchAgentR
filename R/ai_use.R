@@ -256,7 +256,7 @@ ai_use_statement <- function(episodes, purpose, human_review = NULL,
   } else {
     paste(.ai_use_appendix(eps, f, s), collapse = "\n")
   }
-  if (!is.null(file)) writeLines(enc2utf8(text), file, useBytes = TRUE)
+  if (!is.null(file)) write_text(text, file, encoding = "UTF-8")
   structure(text, class = "ai_use_statement", facts = f, style = style)
 }
 

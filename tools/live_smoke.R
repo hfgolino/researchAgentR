@@ -57,7 +57,8 @@ resp_summary <- function(r) {
           r$latency, paste(r$notes, collapse = "; "))
 }
 
-sink(file.path(out_dir, "log.txt"), split = TRUE)
+log_con <- file(file.path(out_dir, "log.txt"), open = "wt", encoding = "UTF-8")
+sink(log_con, split = TRUE)
 cat("researchAgentR", as.character(packageVersion("researchAgentR")), "| httr2",
     as.character(packageVersion("httr2")), "|", R.version.string, "|", stamp, "\n\n")
 
@@ -320,8 +321,9 @@ if (!is.null(ol) && nrow(ol)) {
 
 # ---- Save ---------------------------------------------------------------------------
 res <- do.call(rbind, results)
-write.csv(res, file.path(out_dir, "results.csv"), row.names = FALSE)
+write.csv(res, file.path(out_dir, "results.csv"), row.names = FALSE, fileEncoding = "UTF-8")
 saveRDS(objects, file.path(out_dir, "objects.rds"))
 cat("\n", sum(res$status == "OK"), "OK |", sum(res$status == "FAIL"), "FAIL |",
     sum(res$status == "SKIP"), "SKIP. Results in", out_dir, "\n")
 sink()
+close(log_con)

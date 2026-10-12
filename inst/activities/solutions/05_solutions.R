@@ -146,7 +146,7 @@ file.copy(file.path(skills_dir, "summarizing-methods"), my_skills, recursive = T
 
 rel_dir <- file.path(my_skills, "extracting-reliability")
 dir.create(rel_dir, showWarnings = FALSE)
-writeLines(c(
+write_text(c(
   "---",
   "name: extracting-reliability",
   "description: Extracts reliability evidence (coefficient, value, sample, and where it is reported) from a methods or results section. Use when the user asks about the reliability of a scale or measure.",

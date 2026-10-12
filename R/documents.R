@@ -85,7 +85,7 @@ read_documents <- function(path, by = c("paragraph", "file")) {
 .read_one <- function(file) {
   ext <- tolower(tools::file_ext(file))
   if (ext == "pdf") return(.read_pdf(file))
-  lines <- readLines(file, warn = FALSE, encoding = "UTF-8")
+  lines <- read_text(file, encoding = "UTF-8")
   switch(ext,
     tex = .paragraphs(strsplit(.tex_to_text(paste(lines, collapse = "\n")), "\n", fixed = TRUE)[[1]],
                       heading = .tex_heading),

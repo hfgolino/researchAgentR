@@ -232,7 +232,8 @@ run_eval <- function(solver, tasks, trials = 3, budget = researchAgentR::budget(
   res <- .as_eval_results(res, solver = name, budget = budget, trials = trials)
   if (!is.null(save_dir)) {
     saveRDS(res, file.path(save_dir, "eval_results.rds"))
-    utils::write.csv(as.data.frame(res), file.path(save_dir, "eval_results.csv"), row.names = FALSE)
+    utils::write.csv(as.data.frame(res)[, !vapply(res, is.list, logical(1)), drop = FALSE],
+                     file.path(save_dir, "eval_results.csv"), row.names = FALSE, fileEncoding = "UTF-8")
   }
   res
 }

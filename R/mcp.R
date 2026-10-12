@@ -252,7 +252,7 @@
 .mcp_stderr_tail <- function(client) {
   f <- client$state$stderr_file
   if (is.null(f) || !file.exists(f)) return("")
-  x <- utils::tail(readLines(f, warn = FALSE), 5)
+  x <- utils::tail(read_text(f, encoding = "UTF-8"), 5)
   if (length(x)) paste0("\nServer messages (stderr):\n", paste(x, collapse = "\n")) else ""
 }
 

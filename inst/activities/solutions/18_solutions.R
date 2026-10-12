@@ -11,7 +11,7 @@ set_groq_key()
 manuscript <- system.file("extdata", "planted_errors", "aigenie_excerpt_with_errors.md",
                           package = "researchAgentR")
 key <- read.csv(system.file("extdata", "planted_errors", "answer_key.csv", package = "researchAgentR"),
-                stringsAsFactors = FALSE)
+                stringsAsFactors = FALSE, fileEncoding = "UTF-8")
 dir.create("review_work", showWarnings = FALSE)
 my_copy <- file.path("review_work", basename(manuscript))
 file.copy(manuscript, my_copy, overwrite = TRUE)
@@ -131,7 +131,7 @@ p_rule <- rbind(default_style_rules(),
                            suggestion = "A p-value is never zero: write p < .001.",
                            severity = "medium"))
 test_file <- file.path(tempdir(), "p_values.md")
-writeLines(c("# Results", "",
+write_text(c("# Results", "",
              "The groups differed, t(98) = 4.20, p = .000, d = 0.84.", "",
              "The correlation was small, r(120) = .15, p = .098, and the slope was large, p = 0.000."),
            test_file)

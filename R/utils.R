@@ -146,18 +146,82 @@ save_table <- function(x, file, plain_punctuation = TRUE) {
     if (is.list(x[[j]])) x[[j]] <- vapply(x[[j]], function(v) paste(unlist(v), collapse = "; "), character(1))
     if (is.character(x[[j]]) && plain_punctuation) x[[j]] <- .plain_punctuation(x[[j]])
   }
+  # The CSV text is built here rather than with write.csv(), which converts
+  # text to the system's encoding first (and loses characters where that is
+  # not UTF-8). Quoting follows write.csv(): text in double quotes, inner
+  # quotes doubled, NA unquoted.
+  q <- function(v) paste0("\"", gsub("\"", "\"\"", enc2utf8(v), fixed = TRUE), "\"")
+  cols <- lapply(x, function(v) {
+    if (is.factor(v)) v <- as.character(v)
+    out <- if (is.character(v)) q(v) else as.character(v)
+    out[is.na(v)] <- "NA"
+    out
+  })
+  rows <- if (nrow(x)) do.call(paste, c(cols, sep = ",")) else character(0)
   con <- file(file, open = "wb")
   on.exit(close(con))
-  writeBin(as.raw(c(0xEF, 0xBB, 0xBF)), con)   # the UTF-8 byte-order mark
-  lines <- utils::capture.output(utils::write.csv(x, row.names = FALSE))
-  writeBin(charToRaw(enc2utf8(paste0(paste(lines, collapse = "\n"), "\n"))), con)
+  writeBin(as.raw(c(0xEF, 0xBB, 0xBF)), con)   # EF BB BF: the UTF-8 byte-order mark
+  writeBin(charToRaw(paste0(paste(c(paste(q(names(x)), collapse = ","), rows), collapse = "\n"), "\n")), con)
   invisible(file)
 }
 
 .plain_punctuation <- function(x) {
-  x <- gsub("[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]", "-", x)
-  x <- gsub("[\u2018\u2019\u201A\u2032]", "'", x)
-  x <- gsub("[\u201C\u201D\u201E\u2033]", "\"", x)
-  x <- gsub("[\u00A0\u2007\u2009\u202F]", " ", x)
-  gsub("\u2026", "...", x)
+  # patterns built from code points, so they work in any locale
+  u <- function(...) paste0("[", intToUtf8(c(...), multiple = FALSE), "]")
+  x <- enc2utf8(x)
+  x <- gsub(u(0x2010:0x2015, 0x2212), "-", x, perl = TRUE)
+  x <- gsub(u(0x2018, 0x2019, 0x201A, 0x2032), "'", x, perl = TRUE)
+  x <- gsub(u(0x201C, 0x201D, 0x201E, 0x2033), "\"", x, perl = TRUE)
+  x <- gsub(u(0x00A0, 0x2007, 0x2009, 0x202F), " ", x, perl = TRUE)
+  gsub(intToUtf8(0x2026), "...", x, fixed = TRUE)
+}
+
+#' Read and write text files as UTF-8
+#'
+#' All text the package saves (episodes, notes, skills, reports, revised
+#' manuscripts) is written as UTF-8, and all text it reads is read as UTF-8,
+#' whatever the computer's own encoding (Windows often uses another one by
+#' default). These two functions do the same for your own files.
+#' `read_text()` falls back to Latin-1 for lines that are not valid UTF-8, so
+#' an old file still reads.
+#'
+#' @param text A character vector (one element per line).
+#' @param file Path of the file.
+#' @param append Add to the end of the file instead of replacing it?
+#' @param encoding The encoding of the file; always `"UTF-8"` for files the
+#'   package writes.
+#' @param n Number of lines to read (`-1` for all).
+#' @return `write_text()` returns the path, invisibly; `read_text()` the lines.
+#' @examples
+#' f <- tempfile(fileext = ".md")
+#' write_text(c("# Notes", "Caf\u00e9 \u03b1 = .91"), f)
+#' read_text(f)
+#' @export
+write_text <- function(text, file, append = FALSE, encoding = "UTF-8") {
+  text <- as.character(text)
+  if (!identical(toupper(encoding), "UTF-8")) {
+    con <- file(file, open = if (append) "a" else "w", encoding = encoding)
+    on.exit(close(con))
+    writeLines(text, con)
+    return(invisible(file))
+  }
+  con <- file(file, open = if (append) "ab" else "wb")
+  on.exit(close(con))
+  if (length(text)) writeBin(charToRaw(enc2utf8(paste0(paste(text, collapse = "\n"), "\n"))), con)
+  invisible(file)
+}
+
+#' @rdname write_text
+#' @export
+read_text <- function(file, n = -1L, encoding = "UTF-8") {
+  if (!identical(toupper(encoding), "UTF-8")) {
+    con <- file(file, open = "r", encoding = encoding)
+    on.exit(close(con))
+    return(enc2utf8(readLines(con, n = n, warn = FALSE)))
+  }
+  x <- readLines(file, n = n, warn = FALSE, encoding = "UTF-8")
+  bad <- !validUTF8(x)   # lines that are not UTF-8: read them as Latin-1
+  if (any(bad)) x[bad] <- iconv(x[bad], from = "latin1", to = "UTF-8")
+  if (length(x)) x[1] <- sub(paste0("^", intToUtf8(0xFEFF)), "", x[1], perl = TRUE)   # a byte-order mark
+  x
 }
