@@ -117,3 +117,47 @@ count_tokens <- function(x) {
 `[.citation_check` <- function(x, ...) .subset_keep(x, NextMethod())
 #' @export
 `[.lit_records` <- function(x, ...) .subset_keep(x, NextMethod())
+
+#' Save a table as a CSV file that spreadsheet programs open correctly
+#'
+#' `write.csv()` writes UTF-8 text without a byte-order mark, and Excel and
+#' Numbers on macOS then read it in an older encoding, so characters from
+#' model output show up garbled (one hyphen as three odd characters).
+#' `save_table()` writes
+#' UTF-8 with a byte-order mark, which these programs recognize, and by
+#' default replaces typographic punctuation that models like to emit
+#' (non-breaking hyphens, curly quotes, narrow spaces) with plain ASCII.
+#' Letters with accents and symbols such as the greater-or-equal sign are kept.
+#'
+#' @param x A data frame.
+#' @param file Path of the CSV file.
+#' @param plain_punctuation Replace typographic hyphens, dashes, quotes and
+#'   spaces with ASCII ones?
+#' @return The file path, invisibly. `read.csv(file, fileEncoding =
+#'   "UTF-8-BOM")` reads it back.
+#' @examples
+#' d <- data.frame(format = "Five\\u2011point scale from \\u2018never\\u2019 to \\u2018often\\u2019")
+#' f <- save_table(d, tempfile(fileext = ".csv"))
+#' read.csv(f, fileEncoding = "UTF-8-BOM")
+#' @export
+save_table <- function(x, file, plain_punctuation = TRUE) {
+  x <- as.data.frame(x, stringsAsFactors = FALSE)
+  for (j in seq_along(x)) {
+    if (is.list(x[[j]])) x[[j]] <- vapply(x[[j]], function(v) paste(unlist(v), collapse = "; "), character(1))
+    if (is.character(x[[j]]) && plain_punctuation) x[[j]] <- .plain_punctuation(x[[j]])
+  }
+  con <- file(file, open = "wb")
+  on.exit(close(con))
+  writeBin(as.raw(c(0xEF, 0xBB, 0xBF)), con)   # the UTF-8 byte-order mark
+  lines <- utils::capture.output(utils::write.csv(x, row.names = FALSE))
+  writeBin(charToRaw(enc2utf8(paste0(paste(lines, collapse = "\n"), "\n"))), con)
+  invisible(file)
+}
+
+.plain_punctuation <- function(x) {
+  x <- gsub("[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]", "-", x)
+  x <- gsub("[\u2018\u2019\u201A\u2032]", "'", x)
+  x <- gsub("[\u201C\u201D\u201E\u2033]", "\"", x)
+  x <- gsub("[\u00A0\u2007\u2009\u202F]", " ", x)
+  gsub("\u2026", "...", x)
+}

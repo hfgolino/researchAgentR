@@ -337,6 +337,55 @@ get_work <- function(doi_or_id) {
   out
 }
 
+#' Get many works from OpenAlex by ID or DOI
+#'
+#' Looks up a list of works in batches of 50 with one list request per batch
+#' (filters `openalex:W1|W2|...` or `doi:...|...`), which is much faster than
+#' calling [get_work()] for each one. Used, for example, to build a screening
+#' set from a list of OpenAlex IDs and human labels (Activity 12).
+#'
+#' @details A list request costs $0.10 per 1,000 calls of the OpenAlex daily
+#'   budget (see [search_openalex()]), so 1,000 works (20 requests) use a
+#'   fraction of a cent. Works OpenAlex does not know come back as rows of
+#'   `NA`, counted in a message, never dropped silently.
+#' @param ids OpenAlex work IDs (`"W2159212729"` or the full URL) or DOIs (any
+#'   common form); one kind or a mix.
+#' @param batch_size IDs per request (at most 100; 50 keeps URLs short).
+#' @return A data frame with one row per input, in the input order, with the
+#'   columns of [search_openalex()] plus `requested` (the input value) and
+#'   `found`.
+#' @examples
+#' \dontrun{
+#' get_works(c("W2159212729", "10.1007/s11336-021-09820-y"))
+#' }
+#' @export
+get_works <- function(ids, batch_size = 50) {
+  ids <- as.character(ids)
+  batch_size <- min(100L, max(1L, as.integer(batch_size)))
+  is_oa <- grepl("^(https?://openalex\\.org/)?[Ww][0-9]+$", trimws(ids))
+  key <- ifelse(is_oa, toupper(sub("^https?://openalex\\.org/", "", trimws(ids))), normalize_doi(ids))
+  fetch <- function(keys, field) {
+    keys <- unique(keys[!is.na(keys)])
+    if (!length(keys)) return(NULL)
+    value <- if (field == "openalex") keys else paste0("https://doi.org/", keys)
+    batches <- split(value, ceiling(seq_along(value) / batch_size))
+    .lit_bind(lapply(batches, function(b) {
+      .openalex_list(list(filter = paste0(field, ":", paste(b, collapse = "|"))), length(b))
+    }))
+  }
+  got <- .lit_bind(Filter(Negate(is.null), list(fetch(key[is_oa], "openalex"), fetch(key[!is_oa], "doi"))))
+  match_key <- if (nrow(got)) ifelse(is_oa, match(key, got$id), match(key, normalize_doi(got$doi))) else
+    rep(NA_integer_, length(ids))
+  out <- if (nrow(got)) got[match_key, , drop = FALSE] else
+    .lit_records(title = rep(NA, length(ids)), year = NA, doi = NA, authors = NA, source = NA,
+                 abstract = NA, oa_url = NA, id = NA, database = "OpenAlex")
+  rownames(out) <- NULL
+  out$requested <- ids
+  out$found <- !is.na(match_key)
+  if (any(!out$found)) .msg(sum(!out$found), " of ", length(ids), " works were not found in OpenAlex (rows of NA).")
+  out
+}
+
 #' Snowball through references and citations (OpenAlex)
 #'
 #' Backward snowballing lists the works a paper cites (`get_references()`);

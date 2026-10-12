@@ -133,3 +133,12 @@ test_that("both HTML engines decode named and numeric entities alike", {
   skip_if_not_installed("xml2")
   expect_equal(as.character(html_to_text(h, engine = "xml2")), as.character(a))
 })
+
+test_that("save_table writes a BOM and plain punctuation", {
+  d <- data.frame(a = "Five‑point ‘never’ ≥ 3 items", n = 1)
+  f <- save_table(d, tempfile(fileext = ".csv"))
+  expect_equal(readBin(f, "raw", 3), as.raw(c(0xEF, 0xBB, 0xBF)))
+  back <- read.csv(f, fileEncoding = "UTF-8-BOM", stringsAsFactors = FALSE)
+  expect_equal(back$a, "Five-point 'never' ≥ 3 items")
+  expect_equal(names(back), c("a", "n"))
+})

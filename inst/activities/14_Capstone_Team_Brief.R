@@ -318,7 +318,7 @@ attr(claim_check, "cost")
 # "not_supported", "unclear", or "quote_not_found" when the quote is not in
 # the abstract or the abstract was unavailable) and the status of its
 # reference; the counts per status; and the cost of the support checks.
-write.csv(evidence_table, file.path(OUT_DIR, "claim_evidence_table.csv"), row.names = FALSE)
+save_table(evidence_table, file.path(OUT_DIR, "claim_evidence_table.csv"))
 
 
 # ==============================================================================

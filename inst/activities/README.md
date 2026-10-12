@@ -60,7 +60,7 @@ Rules:
 | 09_Evaluation_Harness.R | Day 3 | run_eval, grader_judge, calibrate_judge, eval_summary, pass_at_k, pass_hat_k, paired_bootstrap, task_compare, contamination_check, plot_frontier |
 | 10_Make_Every_Token_Count.R | Day 3 | cascade, baselines, cost_ledger, plot_frontier, keep, use_cache, model_registry |
 | 11_Local_Models_and_Ask_My_Library.R | Day 3 | read_documents, chunk_documents, embed_texts, ingest_library, vector_store, store_add, store_search, store_save, store_load, retrieve_tool, notes_write, notes_read, cosine_similarity |
-| 12_Screening_Assistant.R | self-study | classify_texts, tool_classify, select_relevant, route, calibrate_judge |
+| 12_Screening_Assistant.R | self-study | get_works, classify_texts, tool_classify, select_relevant, route, calibrate_judge |
 | 13_Data_Agent.R | self-study | define_tool (an open-data API), run_r_code, tool_run_r |
 | 14_Capstone_Team_Brief.R | self-study | team, as_tool, verify_citations, check_claims, ai_use_statement, course_template, cost_ledger, view_episodes |
 | 15_Embeddings_for_Agents.R | self-study | embed_texts, cosine_similarity, route (embedding and llm), minilm_embeddings, label_descriptions, set_jina_key, set_voyage_key |

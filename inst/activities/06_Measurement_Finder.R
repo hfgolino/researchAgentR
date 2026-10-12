@@ -374,7 +374,7 @@ final_table <- instruments[, c("instrument", "n_items", "response_format", "reli
                                "validity_evidence", "population", "license_availability",
                                "doi", "source_url", "verification", "license_flag")]
 final_table
-write.csv(final_table, "measurement_finder_loneliness.csv", row.names = FALSE)
+save_table(final_table, "measurement_finder_loneliness.csv")   # opens cleanly in Excel and Numbers
 # EXPECTED OUTPUT: the agent's table with two columns added by code:
 # verification ("verified", or the first check that failed) and license_flag
 # (TRUE when an entry claims "public domain" for a source outside IPIP: read

@@ -24,6 +24,7 @@
 #   evaluate  recall of human includes, kappa, workload saved, cost
 #
 # researchAgentR functions used here:
+#   get_works()                  titles and abstracts of many works from OpenAlex at once
 #   select_relevant()            rank records by similarity to the criteria (local embeddings)
 #   route()                      send each record to the right screening path
 #   agent(output_schema), run()  a screener that answers in a fixed structure
@@ -61,48 +62,54 @@ dir.create("results", showWarnings = FALSE)
 # --- The data -----------------------------------------------------------------
 # The script reads a CSV with one row per record and the columns
 #   id, title, abstract, label   (label: 1 = include, 0 = exclude, by humans)
-# Two options (the course dataset is announced by the instructor):
 #
-# Option A: one psychology review from the SYNERGY dataset (De Bruin et al.,
-#   2023, doi:10.34894/HE6NAQ, CC0 license, https://github.com/asreview/synergy-dataset).
-#   Its labels are FINAL inclusion decisions, made after reading the full text.
-#   Many records that a careful screener should pass at the abstract stage
-#   were excluded later, at full text. Against these labels, kappa and
-#   precision UNDERSTATE abstract-stage agreement; recall of the final
-#   includes is the meaningful number (a study that was finally included
-#   should never be excluded at the abstract stage).
-#   SYNERGY lists records by OpenAlex ID with their labels; the titles and
-#   abstracts can be fetched in R with get_work() (see the commented code
-#   below; check the column names in the repository's README first).
+# Course dataset: the Oud et al. (2018) review of specialized psychotherapies
+# for adults with borderline personality disorder, from the SYNERGY dataset
+# (De Bruin et al., 2023, https://doi.org/10.34894/HE6NAQ, CC0). The package
+# ships the review's 986 OpenAlex IDs with the authors' decisions (20
+# includes); the titles and abstracts are retrieved from OpenAlex below.
+# Source and citations: system.file("extdata", "synergy", "SOURCE.md",
+# package = "researchAgentR").
 #
-# Option B: 150 to 200 abstracts labeled by the instructor at the
-#   title-and-abstract stage. Here kappa measures abstract-stage agreement
-#   directly.
+# The labels are FINAL inclusion decisions, made after reading the full text.
+# Many records that a careful screener should pass at the abstract stage
+# were excluded later, at full text. Against these labels, kappa and
+# precision UNDERSTATE abstract-stage agreement; recall of the final includes
+# is the meaningful number (a study that was finally included should never be
+# excluded at the abstract stage).
 #
-# Never invent records or labels: use real abstracts and real human decisions.
+# Your own review instead: save a CSV with the four columns (real abstracts
+# and real human decisions only; participant or confidential data never go
+# to cloud models) and set SCREENING_FILE to it.
 SCREENING_FILE <- "data/screening.csv"
 
-# # Option A helper (run once, then save the CSV). Column names to verify:
-# synergy <- read.csv("path/to/the_review_ids.csv")      # from the SYNERGY repository
-# works <- lapply(synergy$openalex_id, function(id) tryCatch(get_work(id), error = function(e) NULL))
-# ok <- !vapply(works, is.null, logical(1))
-# screening <- data.frame(id = synergy$openalex_id[ok],
-#                         title = vapply(works[ok], `[[`, character(1), "title"),
-#                         abstract = vapply(works[ok], `[[`, character(1), "abstract"),
-#                         label = synergy$label_included[ok])
-# dir.create("data", showWarnings = FALSE)
-# write.csv(screening, SCREENING_FILE, row.names = FALSE)
+if (!file.exists(SCREENING_FILE)) {
+  ids <- read.csv(system.file("extdata", "synergy", "Oud_2018_ids.csv", package = "researchAgentR"),
+                  stringsAsFactors = FALSE)
+  works <- keep("screen12_oud2018_works", get_works(ids$openalex_id))   # 20 OpenAlex list calls
+  screening_all <- data.frame(id = ids$openalex_id, title = works$title, abstract = works$abstract,
+                              label = ids$label_included, stringsAsFactors = FALSE)
+  screening_all <- screening_all[works$found, ]   # count what OpenAlex no longer has
+  dir.create("data", showWarnings = FALSE)
+  write.csv(screening_all, SCREENING_FILE, row.names = FALSE)
+}
+# EXPECTED OUTPUT: the first time, a message if some works were not found;
+# data/screening.csv then exists and later runs read it directly.
 
 # --- The review question and the inclusion criteria (written BEFORE screening) ---
-# Write each criterion as a STATEMENT that is true of a record to include:
-# the same text is read by the screener agent and asked to Jev as a Noul
-# question. Format example, for a hypothetical review of loneliness
-# interventions: population = "The participants are adults aged 60 or older."
-REVIEW_TOPIC <- "[REPLACE: the question of the review in SCREENING_FILE, in one sentence]"
+# Each criterion is a STATEMENT that is true of a record to include: the same
+# text is read by the screener agent and asked to Jev as a Noul question.
+# These follow the review's published eligibility criteria (Oud et al., 2018,
+# https://doi.org/10.1177/0004867418791257, as recorded in SYNERGY).
+REVIEW_TOPIC <- paste(
+  "Randomized controlled trials of specialized psychotherapies (dialectical behavior",
+  "therapy, mentalization-based treatment, transference-focused psychotherapy or schema",
+  "therapy) for adults with borderline personality disorder.")
 INCLUSION_CRITERIA <- c(
-  population = "[REPLACE: a statement about who was studied]",
-  design     = "[REPLACE: a statement about the study design or data]",
-  topic      = "[REPLACE: a statement about the construct, exposure or outcome]")
+  population = "The participants are adults (18 years or older) diagnosed with borderline personality disorder.",
+  design     = "The study is a randomized controlled trial.",
+  topic      = paste("The study tests a full specialized psychotherapy for borderline personality",
+                     "disorder (DBT, MBT, TFP or schema therapy) with an individual therapy component."))
 
 if (any(grepl("^\\[REPLACE", c(REVIEW_TOPIC, INCLUSION_CRITERIA)))) {
   stop("Write REVIEW_TOPIC and INCLUSION_CRITERIA for the review in SCREENING_FILE first.")
@@ -383,7 +390,7 @@ sample_df[truth & !pipeline, c("id", "title")]
 # EXPECTED OUTPUT: the calibration printout (pairs, agreement, kappa, table)
 # for automatic decisions; one row with recall, precision, the share of
 # records sent to a person and the number of missed includes; then the titles
-# of the missed includes. With Option A labels (final full-text decisions),
+# of the missed includes. With the course labels (final full-text decisions),
 # precision and kappa are understated; recall is the number to report.
 
 
