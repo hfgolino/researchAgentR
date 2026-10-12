@@ -35,7 +35,7 @@
       substr(txt, 1, .opt("log_chars", 4000))
     }, character(1)),
     stop_reason = reply$stop_reason %||% "", notes = reply$notes %||% character(0),
-    rate_limits = reply$headers %||% list()
+    rate_limits = if (length(reply$headers)) stats::setNames(lapply(unclass(reply$headers), as.character), names(reply$headers)) else list()
   )
   # Provider-side tools may carry a fee per call that the token price does not
   # include. Fees are counted only when set, in US$ per call, for example

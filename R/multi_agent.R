@@ -56,8 +56,13 @@ sub_episodes <- function(id = NULL, clear = FALSE) {
     return(get(id, envir = .sub_episode_env, inherits = FALSE))
   }
   eps <- lapply(ids, get, envir = .sub_episode_env, inherits = FALSE)
-  df <- if (length(eps)) episodes_df(eps) else data.frame()
-  if (length(eps)) df$called_as_tool <- vapply(eps, function(e) e$called_as_tool %||% NA_character_, character(1))
+  df <- if (length(eps)) episodes_df(eps) else
+    data.frame(id = character(0), agent = character(0), model = character(0), task = character(0),
+               stop_reason = character(0), model_calls = integer(0), tool_calls = integer(0),
+               tool_errors = integer(0), tokens = numeric(0), cache_read = numeric(0),
+               peak_context = numeric(0), cost = numeric(0), seconds = numeric(0),
+               started = character(0))
+  df$called_as_tool <- vapply(eps, function(e) e$called_as_tool %||% NA_character_, character(1))
   if (clear) {
     rm(list = ls(.sub_episode_env, all.names = TRUE), envir = .sub_episode_env)
   }
@@ -408,6 +413,12 @@ route <- function(input, routes, method = c("llm", "embedding"), model = NULL,
     .stop("`routes` must be a named character vector: names are routes, values describe them.")
   }
   input <- as.character(input)
+  if (!length(input)) {
+    out <- data.frame(input = character(0), route = character(0), probability = numeric(0),
+                      reason = character(0), cost = numeric(0))
+    attr(out, "method") <- method
+    return(out)
+  }
   out <- if (method == "llm") {
     .route_llm(input, routes, model %||% default_model("worker"))
   } else {

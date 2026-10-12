@@ -35,10 +35,17 @@ if (!length(scripts)) stop("No activity scripts selected.")
 # The code each child process runs: echo the source (comments included) and
 # evaluate one top-level expression at a time, recording errors and going on.
 child <- '
+# The runner keeps its own variables in a private environment, so a script
+# that defines lines, refs, res or i cannot break it (and vice versa).
+local({
 args <- commandArgs(trailingOnly = TRUE)
 script <- args[1]; cache <- args[2]; today <- args[3]
 options(width = 110, researchAgentR.cache_dir = cache, researchAgentR.today = today,
-        warn = 1, researchAgentR.verbose = TRUE)
+        repos = c(CRAN = "https://cloud.r-project.org"),
+        warn = 1, researchAgentR.verbose = TRUE,
+        # nobody is at the console: approve tool calls and checkpoints in code
+        # (the logs record source = "option"), as the activities explain
+        researchAgentR.approve = function(tool, arguments) TRUE)
 lines <- readLines(script, warn = FALSE, encoding = "UTF-8")
 exprs <- parse(script, keep.source = TRUE, encoding = "UTF-8")
 refs <- attr(exprs, "srcref")
@@ -66,6 +73,7 @@ sp <- tryCatch(researchAgentR:::.session_spend(), error = function(e) list(cost 
 cat(sprintf("\\n@@SUMMARY errors=%d expressions=%d seconds=%.0f model_cost=%.5f live_model_calls=%s unpriced_calls=%s\\n",
             n_err, length(exprs), as.numeric(difftime(Sys.time(), t_start, units = "secs")),
             sp$cost, sp$live_calls, sp$unpriced_calls))
+})
 '
 child_file <- file.path(out_dir, "child_runner.R")
 writeLines(child, child_file)

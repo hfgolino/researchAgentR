@@ -37,9 +37,14 @@
 # project (File > New Project > New Directory), so that results, saved
 # episodes and HTML pages land in one place.
 
-install.packages(c("remotes", "usethis", "httr2", "jsonlite",
-                   "callr", "xml2", "pdftools", "ggplot2", "processx"))
-remotes::install_github("hfgolino/researchAgentR")
+# Only what is missing is installed, so running this again is quick.
+needed <- c("remotes", "usethis", "httr2", "jsonlite", "callr", "xml2", "pdftools",
+            "ggplot2", "processx")
+missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing)) install.packages(missing)
+if (!requireNamespace("researchAgentR", quietly = TRUE)) {
+  remotes::install_github("hfgolino/researchAgentR")
+}
 
 library(researchAgentR)
 stopifnot(packageVersion("researchAgentR") >= "0.1.0")

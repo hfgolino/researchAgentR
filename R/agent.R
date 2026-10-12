@@ -154,6 +154,7 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
     early <- length(reply$tool_calls) > 1
     for (tc in reply$tool_calls) {
       res <- if (early && tc$name == "final_answer") .early_final(tc) else call_tool(tc, tools)
+      res$output <- .note_repeat(res$output, tc, ep)   # loops are a common failure
       ep <- .record_tool(ep, tc, res, verbose)
       messages <- c(messages, list(list(role = "tool", tool_call_id = tc$id, name = tc$name,
                                         content = res$output, is_error = res$is_error)))
@@ -247,7 +248,7 @@ print.context_strategy <- function(x, ...) {
 # calls a tool named "json" or writes broken arguments. Such errors are the
 # model's mistakes, so the loop reports them back instead of stopping.
 .invalid_tool_call <- function(e) {
-  grepl("tool call validation failed|tool_use_failed|failed to call a function|failed_generation",
+  grepl("tool call validation failed|tool_use_failed|failed to call a function|failed_generation|failed to parse tool call",
         conditionMessage(e), ignore.case = TRUE)
 }
 
@@ -276,3 +277,15 @@ print.context_strategy <- function(x, ...) {
 
 # Error messages from httr2/cli may carry terminal colour codes; logs keep plain text.
 .plain <- function(x) gsub("\033\\[[0-9;]*m", "", x)
+
+# A small model may call the same tool with the same arguments again and
+# again. The call still runs, but the result says so, which often breaks the loop.
+.note_repeat <- function(output, tc, ep) {
+  if (tc$name == "final_answer") return(output)
+  same <- Filter(function(s) identical(s$type, "tool") && identical(s$tool, tc$name) &&
+                   identical(s$arguments, tc$arguments_raw %||% ""), ep$steps)
+  if (!length(same)) return(output)
+  paste0(output, "\n[Note: this exact call was already made ", length(same), " time(s) ",
+         "(first at step ", same[[1]]$step, ") and gave this same result. ",
+         "Use it, change the arguments, or finish.]")
+}

@@ -475,6 +475,10 @@ read_page <- function(url, max_chars = 20000, via = c("direct", "jina")) {
       stop(e)
     })
     body <- r$body
+    if (!is.list(body) && (!is.character(body) || length(body) != 1 || is.na(body))) {
+      .stop("The address returned no readable text (it may be a PDF or another binary file). ",
+            "Download the file and read it with read_documents().")
+    }
     if (is.list(body)) {           # a JSON response: show it as text
       text <- as.character(.to_json(body, pretty = TRUE))
       title <- NA_character_

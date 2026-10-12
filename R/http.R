@@ -68,7 +68,9 @@
   url <- httr2::resp_url(resp)
   hint <- switch(as.character(httr2::resp_status(resp)),
     "401" = "Check the API key (see ?set_keys and verify_setup()).",
-    "403" = "The key may not have access to this model or endpoint.",
+    "403" = if (grepl("/(chat/completions|responses|messages|models|embed|embeddings)$", url))
+      "The key may not have access to this model or endpoint." else
+      "The server refused the request (some publishers block automated readers; try read_page(via = \"jina\") or another source).",
     "404" = if (grepl(":11434/", url))
       "Ollama does not have this model: pull it first in a terminal (ollama pull <model>), then check ollama_status()." else
       if (grepl("/(chat/completions|responses|messages|models|embed|embeddings)$", url))
@@ -133,7 +135,8 @@
   h <- httr2::resp_headers(resp)
   keep <- grepl("^(x-ratelimit|retry-after|anthropic-ratelimit|request-id|x-request-id|mcp-session-id)",
                 tolower(names(h)))
-  as.list(h[keep])
+  # a plain named list of strings (an httr2_headers object cannot be saved as JSON)
+  stats::setNames(lapply(unclass(h)[keep], as.character), names(h)[keep])
 }
 
 # Parallel requests with a cap on simultaneous connections, written to work

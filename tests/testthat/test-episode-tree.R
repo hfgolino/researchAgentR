@@ -61,3 +61,24 @@ test_that("contamination_check reads provider-side tool outputs", {
   expect_equal(hits$where, "builtin_result")
   expect_equal(hits$tool, "browser_search")
 })
+
+test_that("recorded response headers are saved as plain JSON", {
+  ep <- make_ep("hdr", 0.01)
+  reply <- list(usage = list(input = 1, cache_read = 0, cache_write = 0, output = 1, reasoning = 0),
+                cost = 0, content = "x", tool_calls = list(), executed_tools = list(),
+                headers = structure(list(`x-ratelimit-limit-tokens` = "8000"), class = "httr2_headers"))
+  ep <- researchAgentR:::.record_model(ep, reply, list(list(role = "user", content = "q")), FALSE)
+  f <- tempfile(fileext = ".json")
+  expect_silent(save_episode(ep, f, children = FALSE))
+  expect_equal(read_episode(f)$steps[[2]]$rate_limits$`x-ratelimit-limit-tokens`, "8000")
+})
+
+test_that("sub_episodes() and route() return typed empty tables", {
+  sub_episodes(clear = TRUE)
+  d <- sub_episodes()
+  expect_true(all(c("agent", "called_as_tool", "cost") %in% names(d)))
+  r <- route(character(0), c(a = "first", b = "second"))
+  expect_equal(nrow(r), 0)
+  expect_true("route" %in% names(r))
+})
+

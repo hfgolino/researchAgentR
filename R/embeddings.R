@@ -89,7 +89,9 @@ embed_texts <- function(texts, model = default_model("embed"), batch_size = 64,
   if (m$provider == "jina" && !nzchar(m$model)) m$model <- "jina-embeddings-v3"
   embed_batch <- switch(m$provider, ollama = .embed_ollama, jina = .embed_jina,
                         voyage = .embed_voyage, openai = .embed_openai, hf = .embed_hf)
-  texts <- as.character(texts)
+  nm <- names(texts)
+  texts <- as.character(texts)   # (as.character drops names: put them back)
+  names(texts) <- nm
   n <- length(texts)
   todo <- which(!is.na(texts) & nzchar(trimws(texts)))   # empty texts are not sent
   batches <- split(todo, ceiling(seq_along(todo) / batch_size))
