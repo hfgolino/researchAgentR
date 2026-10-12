@@ -81,8 +81,11 @@ rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript
 
 rows <- list()
 for (s in scripts) {
-  work <- file.path(out_dir, sub("\\.R$", "", s))
-  dir.create(work, showWarnings = FALSE)
+  # One working folder per script that persists across runs, as a student's
+  # course folder would: files saved when a result was first computed (episode
+  # JSON files, data) are still there when keep() later loads that result.
+  work <- file.path(root, "activity_work", sub("\\.R$", "", s))
+  dir.create(work, showWarnings = FALSE, recursive = TRUE)
   log <- file.path(out_dir, sub("\\.R$", ".txt", s))
   cat(sprintf("%-46s ", s))
   t0 <- Sys.time()

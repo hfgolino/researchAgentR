@@ -89,9 +89,8 @@ embed_texts <- function(texts, model = default_model("embed"), batch_size = 64,
   if (m$provider == "jina" && !nzchar(m$model)) m$model <- "jina-embeddings-v3"
   embed_batch <- switch(m$provider, ollama = .embed_ollama, jina = .embed_jina,
                         voyage = .embed_voyage, openai = .embed_openai, hf = .embed_hf)
-  nm <- names(texts)
-  texts <- as.character(texts)   # (as.character drops names: put them back)
-  names(texts) <- nm
+  nm <- names(texts)              # kept for the row names of the result
+  texts <- unname(as.character(texts))   # unnamed: a named list would be sent as a JSON object
   n <- length(texts)
   todo <- which(!is.na(texts) & nzchar(trimws(texts)))   # empty texts are not sent
   batches <- split(todo, ceiling(seq_along(todo) / batch_size))
@@ -122,7 +121,7 @@ embed_texts <- function(texts, model = default_model("embed"), batch_size = 64,
   E <- matrix(NA_real_, n, ncol(pieces[[1]]$E))
   for (p in pieces) E[p$rows, ] <- p$E
   E <- .unit_rows(E)
-  rownames(E) <- names(texts)
+  rownames(E) <- nm
   failed <- which(!stats::complete.cases(E))
   if (length(failed)) {
     .warn(sprintf("%d of %d texts were not embedded (rows set to NA)%s", length(failed), n,

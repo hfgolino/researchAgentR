@@ -243,3 +243,10 @@ test_that("find_open_access() works live", {
   expect_true(isTRUE(oa$is_oa[1]))
   expect_equal(oa$detail[2], "not a valid DOI")
 })
+
+test_that("tool_get_work is a tool with one DOI argument", {
+  t <- tool_get_work()
+  expect_s3_class(t, "agent_tool")
+  expect_equal(t$name, "get_work")
+  expect_match(tool_schema(t), '"doi"')
+})

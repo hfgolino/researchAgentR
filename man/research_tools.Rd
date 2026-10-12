@@ -8,6 +8,7 @@
 \alias{tool_europepmc}
 \alias{tool_arxiv}
 \alias{tool_unpaywall}
+\alias{tool_get_work}
 \alias{tool_snowball}
 \title{Research search tools for agents}
 \usage{
@@ -22,6 +23,8 @@ tool_europepmc(n = 10)
 tool_arxiv(n = 10)
 
 tool_unpaywall()
+
+tool_get_work()
 
 tool_snowball(n = 20)
 }
@@ -55,6 +58,9 @@ set the defaults the model starts from.
 \item \code{tool_europepmc()}: \code{\link[=search_europepmc]{search_europepmc()}}.
 \item \code{tool_arxiv()}: \code{\link[=search_arxiv]{search_arxiv()}}.
 \item \code{tool_unpaywall()}: \code{\link[=find_open_access]{find_open_access()}}.
+\item \code{tool_get_work()}: \code{\link[=get_work]{get_work()}}, one work with its COMPLETE abstract (a
+free OpenAlex lookup), for when a verbatim quote is needed: the search
+tools show only the start of each abstract.
 \item \code{tool_snowball()}: \code{\link[=get_references]{get_references()}} and \code{\link[=get_citations]{get_citations()}}.
 }
 }

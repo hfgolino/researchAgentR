@@ -1086,6 +1086,9 @@ print.lit_records <- function(x, ...) {
 #' * `tool_europepmc()`: [search_europepmc()].
 #' * `tool_arxiv()`: [search_arxiv()].
 #' * `tool_unpaywall()`: [find_open_access()].
+#' * `tool_get_work()`: [get_work()], one work with its COMPLETE abstract (a
+#'   free OpenAlex lookup), for when a verbatim quote is needed: the search
+#'   tools show only the start of each abstract.
 #' * `tool_snowball()`: [get_references()] and [get_citations()].
 #'
 #' @inheritParams search_openalex
@@ -1187,6 +1190,22 @@ tool_unpaywall <- function() {
     description = paste(
       "Find a free, legal full-text copy (open access) of a paper from its DOI.",
       "Returns whether it is open access, the best link, the PDF link and the license."),
+    args = list(doi = arg_string("The DOI, for example '10.1080/00273171.2020.1779642'.")))
+}
+
+#' @rdname research_tools
+#' @export
+tool_get_work <- function() {
+  fn <- function(doi) {
+    w <- get_work(doi)
+    paste0("Title: ", w$title, " (", w$year, "). ", w$authors, ". ", w$source, ".\n",
+           "DOI: ", w$doi, "\n",
+           "Abstract: ", if (is.na(w$abstract)) "(OpenAlex has no abstract for this work)" else w$abstract)
+  }
+  define_tool(fn, name = "get_work",
+    description = paste(
+      "Get one work from OpenAlex by its DOI, with the COMPLETE abstract. Search results",
+      "show only the start of each abstract: call this before quoting an abstract verbatim."),
     args = list(doi = arg_string("The DOI, for example '10.1080/00273171.2020.1779642'.")))
 }
 

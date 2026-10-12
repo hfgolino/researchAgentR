@@ -204,11 +204,11 @@ save_episode <- function(episode, file = NULL, dir = "episodes", children = TRUE
     dir.create(dir, showWarnings = FALSE, recursive = TRUE)
     file <- file.path(dir, paste0(episode$id, ".json"))
   }
-  out <- unclass(episode)
+  out <- .json_safe_episode(episode)
   if (children) {
     # the episodes of agents that ran as tools, so a team run is saved whole
     kids <- .with_children(list(episode))[-1]
-    if (length(kids)) out$sub_episodes <- lapply(kids, unclass)
+    if (length(kids)) out$sub_episodes <- lapply(kids, .json_safe_episode)
   }
   write_text(jsonlite::prettify(.to_json(out)), file, encoding = "UTF-8")
   invisible(file)
@@ -231,4 +231,17 @@ read_episode <- function(file) {
   }
   if (is.null(x$seconds) || length(x$seconds) == 0) x$seconds <- NA_real_
   structure(unclass(x), class = "episode")
+}
+
+# Episodes recorded by older versions kept response headers as an httr2
+# object, which JSON cannot hold; plain strings are saved instead.
+.json_safe_episode <- function(episode) {
+  out <- unclass(episode)
+  out$steps <- lapply(out$steps, function(s) {
+    if (length(s$rate_limits)) {
+      s$rate_limits <- stats::setNames(lapply(unclass(s$rate_limits), as.character), names(s$rate_limits))
+    }
+    s
+  })
+  out
 }

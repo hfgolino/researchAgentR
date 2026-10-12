@@ -33,6 +33,7 @@
 #
 # researchAgentR functions used here:
 #   agent(output_schema), team(), as_tool()   the team and its structured hand-offs
+#   tool_get_work()                one work with its complete abstract (for verbatim quotes)
 #   sub_episodes()                 the workers' own episodes
 #   verify_citations(), check_claims()        verification
 #   ai_use_statement()             short statement and appendix from the logs
@@ -85,7 +86,7 @@ SUCCESS <- list(
 # Each worker call runs with its own budget; the team budget caps the lead.
 # max_cost for the team INCLUDES the workers (their cost is recorded on the
 # lead's tool steps); max_steps and max_tokens count the lead's own calls.
-WORKER_BUDGET <- budget(max_steps = 6, max_tokens = 40000, max_cost = 0.01, max_seconds = 240)
+WORKER_BUDGET <- budget(max_steps = 8, max_tokens = 40000, max_cost = 0.01, max_seconds = 240)
 TEAM_BUDGET   <- budget(max_steps = 10, max_tokens = 80000,
                         max_cost = SUCCESS$max_team_cost_usd, max_seconds = 1200)
 WORKER_BUDGET
@@ -104,12 +105,14 @@ literature_scout <- agent(
   name = "literature_scout",
   description = "Finds published papers on a topic and returns DOIs with verbatim quotes from their abstracts.",
   instructions = paste(
-    "Find 5 to 8 relevant, published papers on the topic you are given. Use OpenAlex",
-    "to search and Crossref to confirm DOIs. For each paper give one key",
-    "finding and a VERBATIM quote (one sentence, copied exactly) from the abstract the",
-    "tool returned. Never write a quote from memory; skip papers without an abstract."),
+    "Find 3 to 5 relevant, published papers on the topic you are given. Search with",
+    "search_openalex (search results show only the start of each abstract), then call",
+    "get_work with the DOI of each paper you keep to read its complete abstract. For each",
+    "paper give one key finding and a VERBATIM quote (one sentence, copied exactly) from",
+    "that abstract. Never write a quote from memory; skip papers without an abstract.",
+    "Stop searching once you have enough papers and call final_answer."),
   model = WORKER,
-  tools = list(tool_openalex(n = 8), tool_crossref(n = 5)),
+  tools = list(tool_openalex(n = 8), tool_get_work()),
   output_schema = list(papers = arg_array("The papers found", arg_object("One paper", fields = list(
     doi = arg_string("The DOI, for example 10.1037/xxxx"),
     title = arg_string("The title"),
