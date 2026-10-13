@@ -131,6 +131,11 @@ small_tasks$instruction[1]
 # Same budget for every solver, set BEFORE comparing. Local models are slower,
 # so max_seconds is generous; the time is still measured and reported.
 serve_budget <- budget(max_steps = 8, max_tokens = 40000, max_cost = 0.05, max_seconds = 600)
+# A local model on a laptop can take minutes per task, so the local solvers
+# get ONE trial per task here (3 tasks). The cloud baseline keeps 3 trials.
+# With more time (or a faster computer), set LOCAL_TRIALS <- 3 to compare
+# pass^3 as well.
+LOCAL_TRIALS <- 1
 
 
 # ==============================================================================
@@ -170,21 +175,23 @@ local_finder <- agent("finder", finder_instructions, model = LOCAL_MODEL, tools 
 
 old_cache <- use_cache("off")
 res_local <- keep("act11_eval_local_nothink",
-  run_eval(local_finder, small_tasks, trials = 3, budget = serve_budget,
+  run_eval(local_finder, small_tasks, trials = LOCAL_TRIALS, budget = serve_budget,
            name = "local, 5 tools"))
 use_cache(old_cache)
 check_network(res_local)
 
 eval_summary(list(res_cloud, res_local), k = c(1, 3))
 # EXPECTED OUTPUT: two rows. success_rate, pass^3 (does the solver succeed in
-# ALL three trials of a task?), cost per success (0 for the local model: the
+# ALL three trials of a task? NA for a solver with fewer than 3 trials, such
+# as the local one with LOCAL_TRIALS = 1), cost per success (0 for the local model: the
 # electricity of your laptop is not in the ledger), and p50/p95 seconds
 # (expect the local model to be slower). The difference in success_rate is
 # the quality loss.
 
 task_compare(res_cloud, res_local)
 # EXPECTED OUTPUT: one row per task with the cloud (a) and local (b) success
-# rates over 3 trials, their difference, and "gain", "regression" or "same".
+# rates (over 3 trials for the cloud, LOCAL_TRIALS for the local model), their
+# difference, and "gain", "regression" or "same".
 
 # Look at a failed trajectory, not only at the score:
 as.data.frame(res_local)[!res_local$pass %in% TRUE, c("task_id", "trial", "answer", "stop_reason")]
@@ -260,7 +267,7 @@ harness_solver <- function(task, agent = harness_finder, budget = serve_budget) 
 
 old_cache <- use_cache("off")
 res_harness <- keep("act11_eval_local_harness_nothink",
-  run_eval(harness_solver, small_tasks, trials = 3, name = "local + harness"))
+  run_eval(harness_solver, small_tasks, trials = LOCAL_TRIALS, name = "local + harness"))
 use_cache(old_cache)
 check_network(res_harness)
 
@@ -270,7 +277,7 @@ task_compare(res_local, res_harness)
 # "local + harness" closes part of the gap to "cloud, 5 tools" in
 # success_rate and pass^3, and at what cost in seconds (retries take time).
 # task_compare() shows which tasks gained and which regressed. With 3 tasks
-# and 3 trials, a difference of one trial is noise: treat this as a pilot.
+# and one or three trials, a difference of one trial is noise: treat this as a pilot.
 
 # How often did the verification step send an answer back?
 retried <- vapply(strsplit(res_harness$episode_id, ";"), length, integer(1)) > 1

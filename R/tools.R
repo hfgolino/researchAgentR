@@ -275,10 +275,17 @@ call_tool <- function(tool_call, tools, arguments = NULL) {
   # setTimeLimit() cannot be nested, so tools that run other agents use
   # timeout = Inf and rely on the sub-agent's own budget instead.
   limited <- is.finite(tool$timeout)
-  value <- tryCatch({
+  # The limit is lifted in the handler itself, before anything else runs: a
+  # limit still in force when the handler starts would raise the same error
+  # again outside any handler and stop the whole R process. The outer
+  # tryCatch() catches such a second error, should one slip through.
+  clear <- function() if (limited) setTimeLimit(elapsed = Inf)
+  value <- tryCatch(tryCatch({
     if (limited) setTimeLimit(elapsed = tool$timeout, transient = TRUE)
-    do.call(tool$fn, checked$arguments)
-  }, error = function(e) e, finally = if (limited) setTimeLimit(elapsed = Inf))
+    out <- do.call(tool$fn, checked$arguments)
+    clear()
+    out
+  }, error = function(e) { clear(); e }), error = function(e) { clear(); e })
   if (inherits(value, "error")) {
     msg <- conditionMessage(value)
     if (grepl("elapsed time limit", msg)) msg <- paste0("the tool took longer than ", tool$timeout, " seconds")

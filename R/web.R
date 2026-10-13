@@ -341,6 +341,9 @@ web_search <- function(query, n = 5, include_domains = NULL, exclude_domains = N
 html_to_text <- function(html, engine = c("auto", "xml2", "regex")) {
   engine <- match.arg(engine)
   html <- paste(html, collapse = "\n")
+  # Plain text (for example from a reader service) is returned as it is:
+  # xml2 would take a string without tags for a file name.
+  if (!grepl("<[A-Za-z!/]", html)) return(structure(trimws(html), title = NA_character_))
   if (engine == "auto") engine <- if (requireNamespace("xml2", quietly = TRUE)) "xml2" else "regex"
   if (engine == "xml2" && !requireNamespace("xml2", quietly = TRUE)) {
     .stop("engine = \"xml2\" needs the xml2 package: install.packages(\"xml2\")")

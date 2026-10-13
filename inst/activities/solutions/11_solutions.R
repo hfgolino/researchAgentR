@@ -10,7 +10,7 @@
 # Activity 11: small_tasks, serve_budget, finder_instructions, lean_tools,
 # answer_schema, harness_finder, harness_solver(), answer_of(), res_cloud,
 # res_local, res_harness, check_network(), toy_dir, toy_docs, librarian,
-# LOCAL_MODEL, LOCAL_EFFORT, CLOUD_MODEL and EMBED_MODEL. With use_cache("auto") and
+# LOCAL_MODEL, LOCAL_EFFORT, LOCAL_TRIALS, CLOUD_MODEL and EMBED_MODEL. With use_cache("auto") and
 # keep(), rerunning that script replays the recorded results.
 
 library(researchAgentR)
@@ -44,9 +44,9 @@ no_verify_solver <- function(task, agent = tight_schema, budget = serve_budget) 
 
 old_cache <- use_cache("off")
 res_tight <- keep("act11_ex1_tight",
-  run_eval(tight_only, small_tasks, trials = 3, budget = serve_budget, name = "local, tight menu"))
+  run_eval(tight_only, small_tasks, trials = LOCAL_TRIALS, budget = serve_budget, name = "local, tight menu"))
 res_tight_schema <- keep("act11_ex1_tight_schema",
-  run_eval(no_verify_solver, small_tasks, trials = 3, name = "local, tight menu + schema"))
+  run_eval(no_verify_solver, small_tasks, trials = LOCAL_TRIALS, name = "local, tight menu + schema"))
 use_cache(old_cache)
 check_network(res_tight)
 check_network(res_tight_schema)

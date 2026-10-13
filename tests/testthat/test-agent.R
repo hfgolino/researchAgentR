@@ -31,3 +31,18 @@ test_that("an early final_answer is refused with an explanation", {
   expect_match(r$output, "same turn as other tools")
   expect_equal(researchAgentR:::.plain("\033[38;5;232mHTTP 400\033[0m"), "HTTP 400")
 })
+
+test_that("a tool that exceeds its time limit cannot stop the R session", {
+  busy <- define_tool(function(x) { s <- 0; for (k in 1:5e7) s <- s + k; s }, "Busy work.",
+                      args = list(x = arg_string("x")), name = "busy", timeout = 1)
+  r <- call_tool("busy", list(busy), arguments = list(x = "a"))
+  expect_true(r$is_error)
+  expect_match(r$output, "longer than 1 seconds")
+  Sys.sleep(1.2)   # no lingering limit: this would error if one were left in force
+  expect_true(TRUE)
+})
+
+test_that("plain text is not parsed as HTML", {
+  x <- html_to_text("Title: A page\nURL Source: https://example.org\nSome text")
+  expect_match(as.character(x), "Some text")
+})

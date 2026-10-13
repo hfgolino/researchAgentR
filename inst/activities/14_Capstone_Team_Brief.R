@@ -86,7 +86,13 @@ SUCCESS <- list(
 # Each worker call runs with its own budget; the team budget caps the lead.
 # max_cost for the team INCLUDES the workers (their cost is recorded on the
 # lead's tool steps); max_steps and max_tokens count the lead's own calls.
-WORKER_BUDGET <- budget(max_steps = 8, max_tokens = 40000, max_cost = 0.01, max_seconds = 240)
+# final_call = TRUE: a worker that runs out of steps gets one last call to hand
+# in what it has (stop reason "max_steps_final_answer") instead of nothing.
+# max_cost counts web searches at list price (Tavily: $0.008 each), even on
+# the free plan.
+WORKER_BUDGET <- budget(max_steps = 8, max_tokens = 40000, max_cost = 0.05, max_seconds = 240,
+                        final_call = TRUE)
+HAS_PWR <- requireNamespace("pwr", quietly = TRUE)   # install.packages("pwr") (Activity 00)
 TEAM_BUDGET   <- budget(max_steps = 10, max_tokens = 80000,
                         max_cost = SUCCESS$max_team_cost_usd, max_seconds = 1200)
 WORKER_BUDGET
@@ -147,10 +153,10 @@ design_advisor <- agent(
   description = "Proposes a study design and runs a power analysis in R.",
   instructions = paste(
     "Propose a study design for the aim you are given. Run the power analysis with the",
-    "run_r tool (the pwr package is available) and report the code you ran and the",
-    "sample size it gave. List the main threats to validity."),
+    "run_r tool", if (HAS_PWR) "(the pwr package is attached)" else "(use base R: power.t.test or power.prop.test)",
+    "and report the code you ran and the sample size it gave. List the main threats to validity."),
   model = WORKER,
-  tools = list(tool_run_r(packages = "pwr", timeout = 60)),
+  tools = list(tool_run_r(packages = if (HAS_PWR) "pwr", timeout = 60)),
   output_schema = list(
     design = arg_string("The design in at most 80 words"),
     power_code = arg_string("The exact R code that was run for the power analysis"),

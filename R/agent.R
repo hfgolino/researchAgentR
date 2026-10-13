@@ -77,22 +77,29 @@ print.agent <- function(x, ...) {
 #'   price list; the number here is only an example).
 #' @param max_seconds Maximum wall-clock time.
 #' @param max_tool_errors Stop after this many failed tool calls in a row.
+#' @param final_call When `max_steps` is reached by an agent with an
+#'   `output_schema`, allow one more call in which the model can only call
+#'   `final_answer`, with what it has so far. The episode then stops with
+#'   `"max_steps_final_answer"` (a forced, possibly partial answer: check it)
+#'   instead of `"max_steps"` with no answer. Useful for workers of a team.
 #' @return An object of class `budget`.
 #' @examples
 #' budget(max_steps = 6, max_cost = 0.01)
 #' @export
 budget <- function(max_steps = 10, max_tokens = 60000, max_cost = 0.10, max_seconds = 300,
-                   max_tool_errors = 4) {
+                   max_tool_errors = 4, final_call = FALSE) {
   structure(list(max_steps = max_steps, max_tokens = max_tokens, max_cost = max_cost,
-                 max_seconds = max_seconds, max_tool_errors = max_tool_errors),
+                 max_seconds = max_seconds, max_tool_errors = max_tool_errors,
+                 final_call = final_call),
             class = "budget")
 }
 
 #' @export
 print.budget <- function(x, ...) {
-  cat(sprintf("<budget> %d steps | %s tokens | $%.4f | %d s | %d tool errors in a row\n",
+  cat(sprintf("<budget> %d steps | %s tokens | $%.4f | %d s | %d tool errors in a row%s\n",
               x$max_steps, format(x$max_tokens, big.mark = ","), x$max_cost,
-              x$max_seconds, x$max_tool_errors))
+              x$max_seconds, x$max_tool_errors,
+              if (isTRUE(x$final_call)) " | one final-answer call at max_steps" else ""))
   invisible(x)
 }
 
@@ -124,7 +131,12 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
                    list(role = "user", content = task))
   repeat {
     reason <- .over_budget(ep, budget)
-    if (!is.null(reason)) return(.finish(ep, messages, reason))
+    if (!is.null(reason)) {
+      if (reason == "max_steps" && !is.null(agent$output_schema) && isTRUE(budget$final_call)) {
+        return(.final_call(agent, ep, messages, tools, verbose))
+      }
+      return(.finish(ep, messages, reason))
+    }
     sent <- agent$context$prepare(messages, ep)
     ep <- .record_context(ep, sent, agent$context$name)   # e.g. the cost of a summary
     reply <- tryCatch(
@@ -288,4 +300,28 @@ print.context_strategy <- function(x, ...) {
   paste0(output, "\n[Note: this exact call was already made ", length(same), " time(s) ",
          "(first at step ", same[[1]]$step, ") and gave this same result. ",
          "Use it, change the arguments, or finish.]")
+}
+
+# Out of steps with a structured answer due: one last call in which the model
+# can only call final_answer, with what it has found so far. Small models
+# often keep searching; a partial, structured answer (marked as forced) is
+# more useful to a lead agent than nothing.
+.final_call <- function(agent, ep, messages, tools, verbose) {
+  final_tool <- Filter(function(t) identical(t$name, "final_answer"), tools)
+  messages <- c(messages, list(list(role = "user", content = paste(
+    "The step budget is used up. Call final_answer now with what you have found so far;",
+    "leave out anything you could not check."))))
+  sent <- agent$context$prepare(messages, ep)
+  reply <- tryCatch(chat(sent, model = agent$model, tools = final_tool, max_tokens = agent$max_tokens,
+                         effort = agent$effort), error = function(e) e)
+  if (inherits(reply, "error")) return(.finish(ep, messages, "max_steps"))
+  ep <- .record_model(ep, reply, sent, verbose)
+  messages <- c(messages, list(.assistant_message(reply)))
+  for (tc in reply$tool_calls) {
+    if (tc$name != "final_answer") next
+    res <- call_tool(tc, final_tool)
+    ep <- .record_tool(ep, tc, res, verbose)
+    if (!res$is_error) return(.finish(ep, messages, "max_steps_final_answer", res$value))
+  }
+  .finish(ep, messages, "max_steps")
 }

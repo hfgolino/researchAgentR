@@ -30,7 +30,7 @@ if ("researchAgentR" %in% loadedNamespaces()) {
 readRenviron("~/.Renviron")   # pick up keys added since R started
 
 needed <- c("httr2", "jsonlite", "testthat", "withr", "callr", "processx",
-            "xml2", "pdftools", "ggplot2")
+            "xml2", "pdftools", "ggplot2", "pwr")
 missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing)) {
   message("Installing: ", paste(missing, collapse = ", "))

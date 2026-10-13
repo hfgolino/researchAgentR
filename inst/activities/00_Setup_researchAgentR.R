@@ -39,7 +39,7 @@
 
 # Only what is missing is installed, so running this again is quick.
 needed <- c("remotes", "usethis", "httr2", "jsonlite", "callr", "xml2", "pdftools",
-            "ggplot2", "processx")
+            "ggplot2", "processx", "pwr")   # pwr: power analysis for the design agents
 missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing)) install.packages(missing)
 if (!requireNamespace("researchAgentR", quietly = TRUE)) {

@@ -9,7 +9,8 @@ budget(
   max_tokens = 60000,
   max_cost = 0.1,
   max_seconds = 300,
-  max_tool_errors = 4
+  max_tool_errors = 4,
+  final_call = FALSE
 )
 }
 \arguments{
@@ -27,6 +28,12 @@ price list; the number here is only an example).}
 \item{max_seconds}{Maximum wall-clock time.}
 
 \item{max_tool_errors}{Stop after this many failed tool calls in a row.}
+
+\item{final_call}{When \code{max_steps} is reached by an agent with an
+\code{output_schema}, allow one more call in which the model can only call
+\code{final_answer}, with what it has so far. The episode then stops with
+\code{"max_steps_final_answer"} (a forced, possibly partial answer: check it)
+instead of \code{"max_steps"} with no answer. Useful for workers of a team.}
 }
 \value{
 An object of class \code{budget}.
