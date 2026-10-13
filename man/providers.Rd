@@ -13,8 +13,8 @@ A data frame with one row per provider.
 Every provider is reached by one of four adapters: OpenAI-compatible Chat
 Completions (\code{api = "chat"}), the OpenAI Responses API (\code{"responses"}),
 the Anthropic Messages API (\code{"anthropic"}) or Ollama's own chat API
-(\code{"ollama"}, used for local models because it can turn a model's
-thinking off with \code{effort = "none"}). Add any other OpenAI-compatible
+(\code{"ollama"}, used for local models because it passes \code{effort = "none"}
+on as \code{think = false}, which the OpenAI-compatible endpoint cannot). Add any other OpenAI-compatible
 endpoint with \code{\link[=register_provider]{register_provider()}}.
 }
 \examples{

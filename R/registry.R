@@ -39,8 +39,8 @@
 #' Every provider is reached by one of four adapters: OpenAI-compatible Chat
 #' Completions (`api = "chat"`), the OpenAI Responses API (`"responses"`),
 #' the Anthropic Messages API (`"anthropic"`) or Ollama's own chat API
-#' (`"ollama"`, used for local models because it can turn a model's
-#' thinking off with `effort = "none"`). Add any other OpenAI-compatible
+#' (`"ollama"`, used for local models because it passes `effort = "none"`
+#' on as `think = false`, which the OpenAI-compatible endpoint cannot). Add any other OpenAI-compatible
 #' endpoint with [register_provider()].
 #'
 #' @return A data frame with one row per provider.

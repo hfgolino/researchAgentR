@@ -135,7 +135,8 @@ c(by_hand = by_hand, ledger = r$cost)
 # OPTIONAL, PAID (needs ANTHROPIC_API_KEY; a fraction of a cent):
 r_claude <- chat(question, model = "anthropic:claude-haiku-5-5")
 r_claude
-# OPTIONAL, LOCAL AND FREE (needs Ollama and `ollama pull qwen3:4b`):
+# OPTIONAL, LOCAL AND FREE (needs Ollama and `ollama pull qwen3:4b`; slow on
+# most laptops, see Activity 11):
 r_local <- chat(question, model = "ollama:qwen3:4b", effort = "none")   # "none": no long thinking
 r_local
 

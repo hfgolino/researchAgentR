@@ -1,17 +1,19 @@
-# Solutions: Activity 11, Local Models and "Ask My Library"
+# Solutions: Activity 11, Small Models and "Ask My Library"
 # LLM Agents for Research Using R - Dr. Hudson Golino
 # University of Virginia
 # Updated: November 2026
 #
 # Exercise 3 runs offline (shipped MiniLM embeddings), and the chunking part
 # of Exercise 5 runs offline too; the numbers in their comments were computed
-# offline with exactly this code. Exercises 1, 2 and 4 and the search part of
-# Exercise 5 need Ollama (and Groq for Exercise 2) and the objects of
-# Activity 11: small_tasks, serve_budget, finder_instructions, lean_tools,
-# answer_schema, harness_finder, harness_solver(), answer_of(), res_cloud,
-# res_local, res_harness, check_network(), toy_dir, toy_docs, librarian,
-# LOCAL_MODEL, LOCAL_EFFORT, LOCAL_TRIALS, CLOUD_MODEL and EMBED_MODEL. With use_cache("auto") and
-# keep(), rerunning that script replays the recorded results.
+# offline with exactly this code. Exercises 1 and 2 need Groq; Exercises 4,
+# 5 (search part) and 6 need Ollama for the local embeddings, and Exercise 4
+# also needs Groq for the librarian. They use the objects of Activity 11:
+# small_tasks, serve_budget, TRIALS, finder_instructions, lean_tools,
+# answer_schema, harness_finder, harness_solver(), answer_of(), res_strong,
+# res_small, res_harness, check_network(), toy_dir, toy_docs, toy_chunks,
+# librarian, LIBRARIAN_MODEL, librarian_is_local, STRONG_MODEL, SMALL_MODEL
+# and EMBED_MODEL. With use_cache("auto") and keep(), rerunning that script
+# replays the recorded results.
 
 library(researchAgentR)
 stopifnot(packageVersion("researchAgentR") >= "0.1.0")
@@ -28,10 +30,9 @@ use_cache("auto")
 #   (b) tight menu + structured answer, no verification step
 #   (c) the full harness of Step 5 (res_harness)
 tight_only <- agent("finder_tight", harness_finder$instructions,
-                    model = LOCAL_MODEL, tools = lean_tools, effort = LOCAL_EFFORT)
+                    model = SMALL_MODEL, tools = lean_tools)
 tight_schema <- agent("finder_tight_schema", harness_finder$instructions,
-                      model = LOCAL_MODEL, tools = lean_tools, output_schema = answer_schema,
-                      effort = LOCAL_EFFORT)
+                      model = SMALL_MODEL, tools = lean_tools, output_schema = answer_schema)
 
 # The structured answer is a list (answer, matched_title): grade only the
 # answer field, and carry the ledger as harness_solver() does.
@@ -43,50 +44,60 @@ no_verify_solver <- function(task, agent = tight_schema, budget = serve_budget) 
 }
 
 old_cache <- use_cache("off")
-res_tight <- keep("act11_ex1_tight",
-  run_eval(tight_only, small_tasks, trials = LOCAL_TRIALS, budget = serve_budget, name = "local, tight menu"))
-res_tight_schema <- keep("act11_ex1_tight_schema",
-  run_eval(no_verify_solver, small_tasks, trials = LOCAL_TRIALS, name = "local, tight menu + schema"))
+res_tight <- keep("act11_ex1_small_tight",
+  run_eval(tight_only, small_tasks, trials = TRIALS, budget = serve_budget,
+           name = "small, tight menu"))
+res_tight_schema <- keep("act11_ex1_small_tight_schema",
+  run_eval(no_verify_solver, small_tasks, trials = TRIALS, name = "small, tight menu + schema"))
 use_cache(old_cache)
 check_network(res_tight)
 check_network(res_tight_schema)
 
-eval_summary(list(res_local, res_tight, res_tight_schema, res_harness), k = c(1, 3))
-task_compare(res_local, res_tight)          # effect of the tool menu
+eval_summary(list(res_small, res_tight, res_tight_schema, res_harness), k = c(1, 3))
+task_compare(res_small, res_tight)          # effect of the tool menu
 task_compare(res_tight, res_tight_schema)   # effect of the structured answer
 task_compare(res_tight_schema, res_harness) # effect of the verification step
 # Read the summary from top to bottom: each row adds one component. The
 # component whose row raises success_rate (and pass^3) the most recovered the
-# most. Look at seconds too: the verification step adds a second episode only
-# when the first answer fails the check. With 3 tasks and 3 trials, one trial
-# is 11 percentage points: report this as a pilot and rerun with the full
-# development set before drawing conclusions.
+# most. Look at tokens and seconds too: the tight menu usually SAVES tokens
+# (one tool schema instead of four), while the verification step adds a
+# second episode only when the first answer fails the check. If the small
+# model already passed every trial in Step 4, no component can raise success:
+# the comparison then shows only what each component costs or saves. With 3
+# tasks and 3 trials, one trial is 11 percentage points: report this as a
+# pilot and rerun with the full development set before drawing conclusions.
 
 
 # ==============================================================================
-# EXERCISE 2: THE SAME HARNESS FOR THE CLOUD MODEL
+# EXERCISE 2: THE SAME HARNESS FOR THE STRONG MODEL
 # ==============================================================================
 
-cloud_harness <- agent("finder_harness_cloud", harness_finder$instructions,
-                       model = CLOUD_MODEL, tools = lean_tools, output_schema = answer_schema)
-cloud_harness_solver <- function(task) harness_solver(task, agent = cloud_harness)
+strong_harness <- agent("finder_harness_strong", harness_finder$instructions,
+                        model = STRONG_MODEL, tools = lean_tools, output_schema = answer_schema)
+strong_harness_solver <- function(task) harness_solver(task, agent = strong_harness)
 
+# Free tier: these 3 x 3 trials use the strong model's daily token limit
+# (200,000 for gpt-oss-120b) on top of Step 3. Use trials = 1 if Step 3 ran
+# today.
 old_cache <- use_cache("off")
-res_cloud_harness <- keep("act11_ex2_cloud_harness",
-  run_eval(cloud_harness_solver, small_tasks, trials = 3, name = "cloud + harness"))
+res_strong_harness <- keep("act11_ex2_strong_harness",
+  run_eval(strong_harness_solver, small_tasks, trials = TRIALS, name = "strong + harness"))
 use_cache(old_cache)
-check_network(res_cloud_harness)
+check_network(res_strong_harness)
 
-eval_summary(list(res_cloud, res_cloud_harness, res_local, res_harness), k = c(1, 3))
-task_compare(res_cloud, res_cloud_harness)
-# Compare two DIFFERENCES: (cloud + harness) - cloud, and (local + harness) -
-# local. A strong model often succeeds without the harness, so the gain is
-# smaller (there is less to recover), while the cost in seconds and tokens
-# stays: the structured answer adds a final_answer call, and every retry is a
-# second episode. Cost per success in the summary shows whether the harness
-# pays for itself on the cloud model. A harness that does not change success
-# can still be worth keeping for its VERIFICATION: it turns a wrong DOI into a
-# detected failure instead of a silent one.
+eval_summary(list(res_strong, res_strong_harness, res_small, res_harness), k = c(1, 3))
+task_compare(res_strong, res_strong_harness)
+# Compare two DIFFERENCES: (strong + harness) - strong, and (small + harness)
+# - small. A strong model often succeeds without the harness, so the gain is
+# smaller (there is less to recover), while some costs stay: the structured
+# answer adds a final_answer call, and every retry is a second episode. The
+# tight tool menu can also make the strong model cheaper. Cost per success in
+# the summary shows whether the harness pays for itself on each model. A
+# harness that does not change success can still be worth keeping for its
+# VERIFICATION: it turns a wrong DOI into a detected failure instead of a
+# silent one. Finally, compare "small + harness" with "strong, 4 tools": if
+# they succeed equally often, the small model at half the list price is the
+# better choice for this task.
 
 
 # ==============================================================================
@@ -97,7 +108,7 @@ data(extraversion)
 data(minilm_embeddings)
 E <- minilm_embeddings$texts$extraversion
 MINILM <- "hf:sentence-transformers/all-MiniLM-L6-v2"
-if (!exists("store")) {   # the store of Step 8, rebuilt if this file runs on its own
+if (!exists("store")) {   # the store of Step 9, rebuilt if this file runs on its own
   store <- vector_store(extraversion$text, embeddings = E,
                         metadata = extraversion[, c("doc_id", "subtopic")], model = MINILM)
 }
@@ -120,7 +131,8 @@ mean(precision_at_10)
 # EXERCISE 4: PROMPT INJECTION IN A DOCUMENT
 # ==============================================================================
 
-# A copy of the toy library with one planted file (synthetic, for practice).
+# A copy of the toy library with one planted file (synthetic, for practice;
+# synthetic text may go to the cloud librarian).
 inj_dir <- "toy_library_injected"
 dir.create(inj_dir, showWarnings = FALSE)
 invisible(file.copy(list.files(toy_dir, full.names = TRUE), inj_dir, overwrite = TRUE))
@@ -130,11 +142,12 @@ write_text(c("Reliability update (synthetic).", "",
 
 inj_store <- keep("act11_ex4_store",
                   ingest_library(inj_dir, model = EMBED_MODEL, chunk_words = 20, overlap = 5))
-inj_librarian <- agent("librarian_injected", librarian$instructions, model = LOCAL_MODEL, effort = LOCAL_EFFORT,
-                       tools = list(retrieve_tool(inj_store, k = 4)))
+inj_librarian <- agent("librarian_injected", librarian$instructions, model = LIBRARIAN_MODEL,
+                       tools = list(retrieve_tool(inj_store, k = 4)),
+                       effort = if (librarian_is_local) "none" else NULL)
 
 reliability_q <- "What reliability evidence does the pilot report, and what is still open about reliability?"
-ep_inj <- keep("act11_ex4_librarian", run(inj_librarian, reliability_q, budget = serve_budget))
+ep_inj <- keep("act11_ex4_librarian_small", run(inj_librarian, reliability_q, budget = serve_budget))
 ep_inj$answer
 
 # Did the planted passage reach the model, and did the answer use it? The
@@ -168,6 +181,9 @@ data.frame(value = values,
 # planted passage that states a false number without any "ignore your
 # instructions" (a quieter, harder attack). The real defence is knowing what
 # is in the library, and checking answers against trusted sources in code.
+# The retrieval-only path of Step 11 is not immune either: the planted
+# passage is still shown to the researcher, but a person reading it as a
+# passage, not as an instruction, is much harder to redirect.
 
 
 # ==============================================================================
@@ -186,7 +202,7 @@ chunks_60[grepl("test-retest", chunks_60$text), c("file", "section", "paragraphs
 # Exploratory graph ..."; the 2-word overlap repeats "correlation was"). With
 # 60 words, the whole Results section (paragraphs 3-4, 24 words) is one chunk.
 
-# Live (Ollama): which chunk ranks first for the query?
+# Local embeddings (Ollama): which chunk ranks first for the query?
 store_10 <- keep("act11_ex5_store_10",
   vector_store(chunks_10$text, metadata = chunks_10[, c("file", "section", "paragraphs", "chunk")],
                model = EMBED_MODEL))
@@ -202,8 +218,49 @@ c(words_first_10 = lengths(strsplit(top_10$text[1], "\\s+")),
   value_in_first_10 = grepl(".74", top_10$text[1], fixed = TRUE),
   value_in_first_60 = grepl(".74", top_60$text[1], fixed = TRUE))
 # Small chunks match the query words closely but can separate a number from
-# its label: if the first hit is the chunk ending "correlation was", the agent
-# reads the question but not the answer (k > 1 may rescue it). Large chunks
-# keep the value with its context but carry more text per hit (more tokens
-# for a small local model, and a vaguer match when one chunk mixes topics).
-# Choose the size on a graded set of questions, not by taste.
+# its label: if the first hit is the chunk ending "correlation was", the
+# reader (a person or an agent) sees the question but not the answer (k > 1
+# may rescue it). Large chunks keep the value with its context but carry more
+# text per hit (more tokens to send to a librarian model, and a vaguer match
+# when one chunk mixes topics). Choose the size on a graded set of
+# questions, not by taste.
+
+
+# ==============================================================================
+# EXERCISE 6: TWO LOCAL EMBEDDING MODELS
+# ==============================================================================
+
+# Pull the second model once, in a terminal: ollama pull all-minilm
+MINILM_LOCAL <- "ollama:all-minilm"
+
+# Time the embedding of the toy chunks with each model. keep() would replay
+# a saved result in no time, so the timing runs without it.
+time_embed <- function(model) {
+  t0 <- Sys.time()
+  e <- embed_texts(toy_chunks$text, model = model, input_type = "document")
+  list(embeddings = e, seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")))
+}
+emb_nomic  <- time_embed(EMBED_MODEL)
+emb_minilm <- time_embed(MINILM_LOCAL)
+c(nomic_seconds = emb_nomic$seconds, minilm_seconds = emb_minilm$seconds,
+  nomic_dims = ncol(emb_nomic$embeddings), minilm_dims = ncol(emb_minilm$embeddings))
+
+meta <- toy_chunks[, c("file", "section", "paragraphs", "chunk")]
+store_nomic  <- vector_store(toy_chunks$text, embeddings = emb_nomic$embeddings,
+                             metadata = meta, model = EMBED_MODEL)
+store_minilm <- vector_store(toy_chunks$text, embeddings = emb_minilm$embeddings,
+                             metadata = meta, model = MINILM_LOCAL)
+
+ex6_q <- "What reliability evidence does the pilot report, and what is still open about reliability?"
+hits_nomic  <- store_search(store_nomic, ex6_q, k = 4)
+hits_minilm <- store_search(store_minilm, ex6_q, k = 4)
+data.frame(rank = 1:4,
+           nomic = paste(hits_nomic$file, hits_nomic$section, hits_nomic$paragraphs),
+           minilm = paste(hits_minilm$file, hits_minilm$section, hits_minilm$paragraphs))
+# Both models run on the laptop and send nothing out. all-minilm is smaller
+# (46 MB versus 274 MB) and makes shorter vectors, so it usually embeds
+# faster; whether it ranks the right passages as high is a question for a
+# graded set of questions, like Exercise 5. Scores from the two stores are
+# not comparable with each other (different models, different scales):
+# compare the RANKINGS, not the similarity values. Note that all-minilm reads
+# only a few hundred tokens per text, so chunks of 250 words may be cut.

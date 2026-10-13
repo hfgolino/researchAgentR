@@ -517,7 +517,8 @@ researchAgentR:::.over_budget
 planner_claude <- agent(name = "study_planner_claude", instructions = planner$instructions,
                         model = "anthropic:claude-haiku-5-5", tools = tools)
 ep_claude <- keep("loop_planner_pilot_claude", run(planner_claude, task_pilot, budget = b))
-# OPTIONAL, LOCAL AND FREE (needs Ollama and `ollama pull qwen3:4b`):
+# OPTIONAL, LOCAL AND FREE (needs Ollama and `ollama pull qwen3:4b`; an agent
+# loop on a laptop can take minutes per task, see Activity 11):
 planner_local <- agent(name = "study_planner_local", instructions = planner$instructions,
                        model = "ollama:qwen3:4b", tools = tools,
                        effort = "none")   # no long thinking: much faster on a laptop

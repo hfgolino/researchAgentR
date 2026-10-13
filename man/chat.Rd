@@ -33,8 +33,9 @@ Not combined with \code{tools}: agents use a \code{final_answer} tool instead.}
 
 \item{effort}{Reasoning effort for reasoning models (\code{"low"}, \code{"medium"},
 \code{"high"}); \code{NULL} leaves the provider default. For local models in Ollama,
-\code{"none"} switches thinking off (much faster on a laptop; \code{qwen3} thinks
-at length by default).}
+\code{"none"} asks Ollama to switch thinking off (\code{think = false}). Models
+that only exist as thinking models (for example the default \verb{qwen3:4b}
+since its 2507 release) keep reasoning and write it into the answer.}
 
 \item{temperature}{Sampling temperature; \code{NULL} leaves the provider default.
 Claude 5.x models reject it, so it is dropped for them and the drop is

@@ -281,13 +281,17 @@ groq_models
 # ==============================================================================
 
 # Ollama (https://ollama.com) runs open-weight models on your own computer:
-# free, offline, and your data never leave the laptop. Day 3 compares a local
-# model with a cloud model. Install Ollama, then pull models in a TERMINAL
+# free, offline, and your data never leave the laptop. Activity 11 (Day 3)
+# uses Ollama for local EMBEDDINGS ("ask my library"), which are small and
+# fast on any laptop. Local chat models are optional: on a laptop they are
+# far too slow to drive an agent loop (Activity 11, Step 6, shows the
+# instructor's recorded run). Install Ollama, then pull models in a TERMINAL
 # (not in R):
 #
-#   ollama pull qwen3:4b            about 2.5 GB   tool calling; 8 GB RAM laptops
-#   ollama pull qwen3:8b            about 5.2 GB   better; 16 GB RAM recommended
 #   ollama pull nomic-embed-text    274 MB         embeddings ("ask my library")
+#   ollama pull all-minilm          46 MB          optional, smaller embeddings
+#   ollama pull qwen3:4b            about 2.5 GB   optional local agent demo
+#   ollama pull qwen3:8b            about 5.2 GB   optional; 16 GB RAM recommended
 #
 # Do not pull gpt-oss:120b: it needs about 60 GB of memory.
 
@@ -432,7 +436,7 @@ if (want_python) {
 #  08b_MCP_Clients.R                          Groq                     no          -
 #  09_Evaluation_Harness.R                    Groq                     no          -
 #  10_Make_Every_Token_Count.R                 Groq                     no          stronger baseline model
-#  11_Local_Models_and_Ask_My_Library.R       Groq                     YES         -
+#  11_Small_Models_and_Ask_My_Library.R       Groq                     YES (**)    -
 #  12_Screening_Assistant.R                   Groq                     no          TypeSafe (Jev)
 #  13_Data_Agent.R                            Groq                     no          -
 #  14_Capstone_Team_Brief.R                   Groq, OpenAlex, Tavily   optional    -
@@ -443,5 +447,7 @@ if (want_python) {
 #
 #  (*) Jina only for the page reader option; SearXNG (self-hosted, free) can
 #      replace Tavily. Each activity's header lists exactly what it needs.
+#  (**) Only for local embeddings (nomic-embed-text, 274 MB), which run fast
+#      on any laptop; the local agent of Activity 11 is optional.
 #  Packages used by several activities: callr (sandboxed R code, Activities
 #  07 and 13), pdftools (PDF reading, Activities 11, 17, 18), ggplot2 (figures).

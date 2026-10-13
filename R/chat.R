@@ -29,8 +29,9 @@
 #' @param max_tokens Maximum output tokens (reasoning tokens included).
 #' @param effort Reasoning effort for reasoning models (`"low"`, `"medium"`,
 #'   `"high"`); `NULL` leaves the provider default. For local models in Ollama,
-#'   `"none"` switches thinking off (much faster on a laptop; `qwen3` thinks
-#'   at length by default).
+#'   `"none"` asks Ollama to switch thinking off (`think = false`). Models
+#'   that only exist as thinking models (for example the default `qwen3:4b`
+#'   since its 2507 release) keep reasoning and write it into the answer.
 #' @param temperature Sampling temperature; `NULL` leaves the provider default.
 #'   Claude 5.x models reject it, so it is dropped for them and the drop is
 #'   recorded in `$notes`.
