@@ -77,11 +77,13 @@ print.agent <- function(x, ...) {
 #'   price list; the number here is only an example).
 #' @param max_seconds Maximum wall-clock time.
 #' @param max_tool_errors Stop after this many failed tool calls in a row.
-#' @param final_call When `max_steps` is reached by an agent with an
-#'   `output_schema`, allow one more call in which the model can only call
-#'   `final_answer`, with what it has so far. The episode then stops with
-#'   `"max_steps_final_answer"` (a forced, possibly partial answer: check it)
-#'   instead of `"max_steps"` with no answer. Useful for workers of a team.
+#' @param final_call When `max_steps` or `max_tokens` is reached by an agent
+#'   with an `output_schema`, allow one more call in which the model can only
+#'   call `final_answer`, with what it has so far (and one retry if the
+#'   provider rejects that call). The episode then stops with
+#'   `"max_steps_final_answer"` or `"max_tokens_final_answer"` (a forced,
+#'   possibly partial answer: check it) instead of stopping with no answer.
+#'   Useful for workers of a team.
 #' @return An object of class `budget`.
 #' @examples
 #' budget(max_steps = 6, max_cost = 0.01)
@@ -99,7 +101,7 @@ print.budget <- function(x, ...) {
   cat(sprintf("<budget> %d steps | %s tokens | $%.4f | %d s | %d tool errors in a row%s\n",
               x$max_steps, format(x$max_tokens, big.mark = ","), x$max_cost,
               x$max_seconds, x$max_tool_errors,
-              if (isTRUE(x$final_call)) " | one final-answer call at max_steps" else ""))
+              if (isTRUE(x$final_call)) " | final-answer call when out of steps or tokens" else ""))
   invisible(x)
 }
 
@@ -132,8 +134,9 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
   repeat {
     reason <- .over_budget(ep, budget)
     if (!is.null(reason)) {
-      if (reason == "max_steps" && !is.null(agent$output_schema) && isTRUE(budget$final_call)) {
-        return(.final_call(agent, ep, messages, tools, verbose))
+      if (reason %in% c("max_steps", "max_tokens") && !is.null(agent$output_schema) &&
+          isTRUE(budget$final_call)) {
+        return(.final_call(agent, ep, messages, tools, reason, verbose))
       }
       return(.finish(ep, messages, reason))
     }
@@ -270,8 +273,8 @@ print.context_strategy <- function(x, ...) {
   paste(.shorten(lines[nzchar(lines)][-1], 300), collapse = " ")
 }
 
-.record_invalid_call <- function(ep, e, verbose) {
-  step <- list(step = length(ep$steps) + 1, type = "tool", time = .now(), tool = "(invalid tool call)",
+.record_invalid_call <- function(ep, e, verbose, label = "(invalid tool call)") {
+  step <- list(step = length(ep$steps) + 1, type = "tool", time = .now(), tool = label,
                arguments = "", latency = 0, cost = 0, is_error = TRUE, truncated = FALSE,
                result = .error_line(e), result_chars = nchar(.error_line(e)),
                child_episode = NA_character_)
@@ -302,26 +305,46 @@ print.context_strategy <- function(x, ...) {
          "Use it, change the arguments, or finish.]")
 }
 
-# Out of steps with a structured answer due: one last call in which the model
-# can only call final_answer, with what it has found so far. Small models
-# often keep searching; a partial, structured answer (marked as forced) is
-# more useful to a lead agent than nothing.
-.final_call <- function(agent, ep, messages, tools, verbose) {
+# Out of steps (or tokens) with a structured answer due: one last call in
+# which the model can only call final_answer, with what it has found so far.
+# Small models often keep searching; a partial, structured answer (marked as
+# forced) is more useful to a lead agent than nothing. A rejected call (for
+# example arguments that do not match the schema) gets one retry with the
+# reason, and every failure is recorded as a step, so the trajectory shows it.
+.final_call <- function(agent, ep, messages, tools, reason, verbose, attempts = 2) {
   final_tool <- Filter(function(t) identical(t$name, "final_answer"), tools)
   messages <- c(messages, list(list(role = "user", content = paste(
-    "The step budget is used up. Call final_answer now with what you have found so far;",
+    "The budget is used up. Call final_answer now with what you have found so far;",
     "leave out anything you could not check."))))
-  sent <- agent$context$prepare(messages, ep)
-  reply <- tryCatch(chat(sent, model = agent$model, tools = final_tool, max_tokens = agent$max_tokens,
-                         effort = agent$effort), error = function(e) e)
-  if (inherits(reply, "error")) return(.finish(ep, messages, "max_steps"))
-  ep <- .record_model(ep, reply, sent, verbose)
-  messages <- c(messages, list(.assistant_message(reply)))
-  for (tc in reply$tool_calls) {
-    if (tc$name != "final_answer") next
-    res <- call_tool(tc, final_tool)
-    ep <- .record_tool(ep, tc, res, verbose)
-    if (!res$is_error) return(.finish(ep, messages, "max_steps_final_answer", res$value))
+  for (k in seq_len(attempts)) {
+    sent <- agent$context$prepare(messages, ep)
+    reply <- tryCatch(chat(sent, model = agent$model, tools = final_tool, max_tokens = agent$max_tokens,
+                           effort = agent$effort), error = function(e) e)
+    if (inherits(reply, "error")) {
+      ep <- .record_invalid_call(ep, reply, verbose, label = "(final call rejected)")
+      if (!.invalid_tool_call(reply)) break          # a network or account error: stop
+      messages <- c(messages, list(list(role = "user", content = paste0(
+        "Your last reply was rejected: ", .error_line(reply),
+        " Call final_answer with arguments that follow its schema."))))
+      next
+    }
+    ep <- .record_model(ep, reply, sent, verbose)
+    messages <- c(messages, list(.assistant_message(reply)))
+    if (!length(reply$tool_calls)) {
+      messages <- c(messages, list(list(role = "user", content = "Call the final_answer tool.")))
+      next
+    }
+    for (tc in reply$tool_calls) {
+      res <- if (tc$name == "final_answer") call_tool(tc, final_tool) else
+        list(id = tc$id, name = tc$name, is_error = TRUE, value = NULL, truncated = FALSE, cost = 0,
+             latency = 0, output = "Only final_answer can be called now.")
+      ep <- .record_tool(ep, tc, res, verbose)
+      messages <- c(messages, list(list(role = "tool", tool_call_id = tc$id, name = tc$name,
+                                        content = res$output, is_error = res$is_error)))
+      if (tc$name == "final_answer" && !res$is_error) {
+        return(.finish(ep, messages, paste0(reason, "_final_answer"), res$value))
+      }
+    }
   }
-  .finish(ep, messages, "max_steps")
+  .finish(ep, messages, reason)
 }

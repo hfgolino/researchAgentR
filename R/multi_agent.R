@@ -166,8 +166,12 @@ as_tool <- function(agent, budget = researchAgentR::budget(), name = agent$name,
     value <- ep$answer
     if (is.null(value)) {
       # Not an error: the model should learn the worker stopped early and why.
+      # A second call with a reworded task usually stops the same way and
+      # costs as much again, so the message says so.
       value <- paste0("The ", worker$name, " agent stopped without an answer (stop reason: ",
-                      ep$stop_reason, "). Narrow the task or continue without it.")
+                      ep$stop_reason, sprintf("; this call cost US$%.4f). ", t$cost),
+                      "Do not call it again for the same goal: continue without it ",
+                      "and say in your answer that it returned nothing.")
     }
     structure(value, cost = t$cost, episode_id = ep$id)
   }

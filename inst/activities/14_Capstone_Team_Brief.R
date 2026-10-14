@@ -86,8 +86,10 @@ SUCCESS <- list(
 # Each worker call runs with its own budget; the team budget caps the lead.
 # max_cost for the team INCLUDES the workers (their cost is recorded on the
 # lead's tool steps); max_steps and max_tokens count the lead's own calls.
-# final_call = TRUE: a worker that runs out of steps gets one last call to hand
-# in what it has (stop reason "max_steps_final_answer") instead of nothing.
+# final_call = TRUE: a worker that runs out of steps or tokens gets one last
+# call to hand in what it has (stop reason "max_steps_final_answer" or
+# "max_tokens_final_answer") instead of nothing. Check such answers: they are
+# forced and may be partial.
 # max_cost counts web searches at list price (Tavily: $0.008 each), even on
 # the free plan.
 WORKER_BUDGET <- budget(max_steps = 8, max_tokens = 40000, max_cost = 0.05, max_seconds = 240,
@@ -220,7 +222,9 @@ capstone_team <- team(
   instructions = paste(
     "Write a short proposal brief on the topic you are given. Send the literature scout",
     "the topic; send the measurement finder the main construct and population; send the",
-    "design advisor one specific aim; send the funding scout that aim. Then write the brief",
+    "design advisor one specific aim; send the funding scout that aim. Call each worker",
+    "at most once: a worker that returned nothing will not do better with a reworded task.",
+    "Then write the brief",
     "from their artifacts only: every claim must use a quote and DOI returned by the",
     "literature scout, and every reference must be a paper a worker returned. Never add a",
     "reference, number or quote from memory. Say so when a worker returned nothing."),
