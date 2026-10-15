@@ -156,6 +156,7 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
         paste(vapply(tools, `[[`, character(1), "name"), collapse = ", "), "."))))
       next
     }
+    reply$tool_calls <- .clean_tool_calls(reply$tool_calls, tools)
     ep <- .record_model(ep, reply, sent, verbose)
     messages <- c(messages, list(.assistant_message(reply)))
     if (length(reply$tool_calls) == 0) {
@@ -306,28 +307,35 @@ print.context_strategy <- function(x, ...) {
 }
 
 # Out of steps (or tokens) with a structured answer due: one last call in
-# which the model can only call final_answer, with what it has found so far.
+# which the model must call final_answer, with what it has found so far.
 # Small models often keep searching; a partial, structured answer (marked as
-# forced) is more useful to a lead agent than nothing. A rejected call (for
-# example arguments that do not match the schema) gets one retry with the
-# reason, and every failure is recorded as a step, so the trajectory shows it.
-.final_call <- function(agent, ep, messages, tools, reason, verbose, attempts = 2) {
-  final_tool <- Filter(function(t) identical(t$name, "final_answer"), tools)
+# forced) is more useful to a lead agent than nothing.
+# All tools stay in the request: a provider such as Groq rejects a reply that
+# calls a tool missing from the request, and a model that has used a tool all
+# episode often calls it again. The API's tool choice forces final_answer
+# where the provider supports it; if the provider refuses the forced choice,
+# the next attempt goes without it, and other tool calls are refused in R.
+# Every failure is recorded as a step, so the trajectory shows it.
+.final_call <- function(agent, ep, messages, tools, reason, verbose, attempts = 3) {
   messages <- c(messages, list(list(role = "user", content = paste(
     "The budget is used up. Call final_answer now with what you have found so far;",
-    "leave out anything you could not check."))))
+    "leave out anything you could not check. Do not call any other tool."))))
+  force <- .force_tool(agent$model, "final_answer")
   for (k in seq_len(attempts)) {
     sent <- agent$context$prepare(messages, ep)
-    reply <- tryCatch(chat(sent, model = agent$model, tools = final_tool, max_tokens = agent$max_tokens,
-                           effort = agent$effort), error = function(e) e)
+    reply <- tryCatch(do.call(chat, c(list(sent, model = agent$model, tools = tools,
+                                           max_tokens = agent$max_tokens, effort = agent$effort), force)),
+                      error = function(e) e)
     if (inherits(reply, "error")) {
       ep <- .record_invalid_call(ep, reply, verbose, label = "(final call rejected)")
+      if (length(force)) { force <- list(); next }   # try again without forcing the tool
       if (!.invalid_tool_call(reply)) break          # a network or account error: stop
       messages <- c(messages, list(list(role = "user", content = paste0(
-        "Your last reply was rejected: ", .error_line(reply),
-        " Call final_answer with arguments that follow its schema."))))
+        "Your last reply was rejected: ", .error_line(reply), " Call only final_answer, ",
+        "with arguments that follow its schema."))))
       next
     }
+    reply$tool_calls <- .clean_tool_calls(reply$tool_calls, tools)
     ep <- .record_model(ep, reply, sent, verbose)
     messages <- c(messages, list(.assistant_message(reply)))
     if (!length(reply$tool_calls)) {
@@ -335,9 +343,9 @@ print.context_strategy <- function(x, ...) {
       next
     }
     for (tc in reply$tool_calls) {
-      res <- if (tc$name == "final_answer") call_tool(tc, final_tool) else
+      res <- if (tc$name == "final_answer") call_tool(tc, tools) else
         list(id = tc$id, name = tc$name, is_error = TRUE, value = NULL, truncated = FALSE, cost = 0,
-             latency = 0, output = "Only final_answer can be called now.")
+             latency = 0, output = "Not run: the budget is used up. Only final_answer can be called now.")
       ep <- .record_tool(ep, tc, res, verbose)
       messages <- c(messages, list(list(role = "tool", tool_call_id = tc$id, name = tc$name,
                                         content = res$output, is_error = res$is_error)))
@@ -347,4 +355,27 @@ print.context_strategy <- function(x, ...) {
     }
   }
   .finish(ep, messages, reason)
+}
+
+# The request field that forces one tool, in each API's format (Ollama has none).
+.force_tool <- function(model, name) {
+  api <- .provider_info(parse_model(model)$provider)$api
+  switch(api,
+    chat = list(tool_choice = list(type = "function", `function` = list(name = name))),
+    responses = list(tool_choice = list(type = "function", name = name)),
+    anthropic = list(tool_choice = list(type = "tool", name = name)),
+    list())
+}
+
+# gpt-oss sometimes prefixes a tool name with its namespace
+# ("functions.final_answer"). A prefixed name that matches a tool is that tool.
+.clean_tool_calls <- function(calls, tools) {
+  known <- vapply(tools, `[[`, character(1), "name")
+  lapply(calls, function(tc) {
+    if (!is.null(tc$name) && !tc$name %in% known) {
+      bare <- sub("^(functions|tools)[.:]+", "", tc$name)
+      if (bare %in% known) tc$name <- bare
+    }
+    tc
+  })
 }

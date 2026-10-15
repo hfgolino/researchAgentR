@@ -270,6 +270,13 @@ str(brief, max.level = 1)
 # EXPECTED OUTPUT: a list with title, aims, background, claims, references,
 # instruments, design and funding.
 
+# A brief without references or claims cannot be verified: that happens when
+# the literature scout returned nothing (read its episode in STEP 5).
+if (!length(brief$references) || !length(brief$claims)) {
+  stop("The brief has ", length(brief$references), " references and ", length(brief$claims),
+       " claims, so there is nothing to verify. Read the workers' episodes in STEP 5.")
+}
+
 
 # ==============================================================================
 # STEP 5: READ THE WHOLE TEAM'S TRAJECTORY
