@@ -61,3 +61,19 @@ test_that("OpenAI prompts over 272,000 tokens are priced at the long-context rat
   expect_equal(short, 272000 * 0.10 / 1e6 + 0.50)
   expect_equal(long, 272001 * 0.20 / 1e6 + 0.75)
 })
+
+test_that("live tokens and the largest prompt are tracked per model", {
+  env <- researchAgentR:::.pkg_env
+  old <- list(env$live_tokens, env$max_prompt)
+  on.exit({ env$live_tokens <- old[[1]]; env$max_prompt <- old[[2]] })
+  env$live_tokens <- NULL; env$max_prompt <- NULL
+  expect_null(researchAgentR:::.session_spend()$live_tokens)
+  u <- function(input, output) list(input = input, cache_read = 100, cache_write = 0, output = output)
+  researchAgentR:::.track_tokens("groq:openai/gpt-oss-20b", u(900, 50))
+  researchAgentR:::.track_tokens("groq:openai/gpt-oss-20b", u(4900, 200))
+  researchAgentR:::.track_tokens("ollama:qwen3:4b", u(10, 5))
+  sp <- researchAgentR:::.session_spend()
+  expect_equal(sp$live_tokens[["groq:openai/gpt-oss-20b"]], 1000 + 50 + 5000 + 200)
+  expect_equal(sp$max_prompt[["groq:openai/gpt-oss-20b"]], 5000)
+  expect_equal(sp$live_tokens[["ollama:qwen3:4b"]], 115)
+})

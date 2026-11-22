@@ -83,13 +83,16 @@ sp <- tryCatch(researchAgentR:::.session_spend(), error = function(e) list(cost 
 cat(sprintf("\\n@@SUMMARY errors=%d expressions=%d seconds=%.0f model_cost=%.5f live_model_calls=%s unpriced_calls=%s\\n",
             n_err, length(exprs), as.numeric(difftime(Sys.time(), t_start, units = "secs")),
             sp$cost, sp$live_calls, sp$unpriced_calls))
+# live tokens per model and the largest prompt (to compare with free-tier limits)
+for (m in names(sp$live_tokens)) cat(sprintf("@@TOKENS model=%s live_tokens=%.0f max_prompt=%.0f\\n",
+                                             m, sp$live_tokens[[m]], sp$max_prompt[[m]]))
 })
 '
 child_file <- file.path(out_dir, "child_runner.R")
 writeLines(child, child_file)
 rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
 
-rows <- list()
+rows <- list(); token_rows <- list()
 for (s in scripts) {
   # One working folder per script that persists across runs, as a student's
   # course folder would: files saved when a result was first computed (episode
@@ -115,6 +118,15 @@ for (s in scripts) {
                     unpriced_calls = num("unpriced_calls"))
   rows[[s]] <- row
   write.csv(do.call(rbind, rows), file.path(out_dir, "summary.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+  # tokens.csv: live tokens per script and model, and the largest prompt sent
+  tk <- regmatches(txt, regexpr("@@TOKENS.*", txt))
+  for (line in tk) {
+    part <- function(key) sub(paste0(".*", key, "=([^ ]+).*"), "\\1", line)
+    token_rows[[length(token_rows) + 1]] <- data.frame(script = s, model = part("model"),
+      live_tokens = as.numeric(part("live_tokens")), max_prompt = as.numeric(part("max_prompt")))
+  }
+  if (length(token_rows)) write.csv(do.call(rbind, token_rows), file.path(out_dir, "tokens.csv"),
+                                    row.names = FALSE, fileEncoding = "UTF-8")
   cat(sprintf("exit %s | errors %s | %4.0f s | model $%s\n", status, row$errors, row$seconds,
               format(row$model_cost, digits = 3)))
 }

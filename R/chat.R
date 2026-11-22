@@ -77,7 +77,10 @@ chat <- function(messages, model = default_model("lead"), system = NULL, tools =
   # as unpriced calls), read with researchAgentR:::.session_spend()
   .pkg_env$spend <- (.pkg_env$spend %||% 0) + (if (is.na(res$cost)) 0 else res$cost)
   if (is.na(res$cost)) .pkg_env$unpriced <- (.pkg_env$unpriced %||% 0) + 1
-  if (!isTRUE(res$cached)) .pkg_env$live_calls <- (.pkg_env$live_calls %||% 0) + 1
+  if (!isTRUE(res$cached)) {
+    .pkg_env$live_calls <- (.pkg_env$live_calls %||% 0) + 1
+    .track_tokens(m$id, res$usage)
+  }
   class(res) <- "llm_response"
   res
 }
@@ -187,7 +190,21 @@ print.llm_response <- function(x, ...) {
   )
 }
 
+# Live tokens per model and the largest prompt sent in this R session, to
+# compare a session with a provider's limits (tokens per day and per minute).
+.track_tokens <- function(id, usage) {
+  prompt <- usage$input + usage$cache_read + usage$cache_write
+  tokens <- .pkg_env$live_tokens %||% list()
+  tokens[[id]] <- (tokens[[id]] %||% 0) + prompt + usage$output
+  .pkg_env$live_tokens <- tokens
+  largest <- .pkg_env$max_prompt %||% list()
+  largest[[id]] <- max(largest[[id]] %||% 0, prompt)
+  .pkg_env$max_prompt <- largest
+  invisible(NULL)
+}
+
 .session_spend <- function() {
   list(cost = .pkg_env$spend %||% 0, unpriced_calls = .pkg_env$unpriced %||% 0,
-       live_calls = .pkg_env$live_calls %||% 0)
+       live_calls = .pkg_env$live_calls %||% 0,
+       live_tokens = unlist(.pkg_env$live_tokens), max_prompt = unlist(.pkg_env$max_prompt))
 }
