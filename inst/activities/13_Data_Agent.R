@@ -235,6 +235,14 @@ episode_steps(ep_data)[, c("step", "type", "name", "is_error", "detail")]
 # EXPECTED OUTPUT: a world_bank call, one or more run_r calls (an error is
 # fine: the agent reads it and fixes its code), then a final answer.
 
+# No answer usually means the data never arrived: when every world_bank step
+# is an error (stop reason max_tool_errors), the World Bank API is not
+# answering. The agent did the right thing (it stopped); try again later.
+if (is.null(ep_data$answer)) {
+  stop("The data agent stopped with '", ep_data$stop_reason, "' and gave no answer. Read the ",
+       "step table above: if the world_bank calls failed, the World Bank API is not ",
+       "answering; run this step again in a few minutes.")
+}
 ans <- ep_data$answer
 cat(ans$answer, "\n")
 do.call(rbind, lapply(ans$numbers, as.data.frame))

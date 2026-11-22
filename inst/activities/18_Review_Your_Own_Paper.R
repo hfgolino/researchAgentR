@@ -251,16 +251,23 @@ refused
 # 6b. With a local model (Ollama running, model pulled; see Activity 11).
 #     Slower, and usually less thorough than a large cloud model: compare
 #     its recall with Step 5.
-if (inherits(try(ollama_status(), silent = TRUE), "data.frame")) {
+LOCAL_REVIEWER <- "qwen3:8b"     # any chat model you pulled (ollama_status() lists them)
+pulled <- tryCatch(ollama_status()$name, error = function(e) character())
+if (LOCAL_REVIEWER %in% pulled) {
   review_local <- keep("review_planted_local", review_manuscript(
     my_copy, focus = c("argument", "reporting"), guidelines = my_guidelines,
-    rules = my_rules, model = "ollama:qwen3:8b", confidential = TRUE, run_code = FALSE))
+    rules = my_rules, model = paste0("ollama:", LOCAL_REVIEWER), confidential = TRUE,
+    run_code = FALSE))
   print(review_local)
   print(recall_table(review_local, key))
+} else {
+  message("Step 6b skipped: Ollama is not running or the model is not pulled. In a terminal: ",
+          "ollama pull ", LOCAL_REVIEWER)
 }
 
-# EXPECTED OUTPUT (only with Ollama): the same structure as Step 5, the note
-# "DOIs not checked online because confidential = TRUE.", and cost $0.
+# EXPECTED OUTPUT (only with Ollama and the model pulled): the same structure
+# as Step 5, the note "DOIs not checked online because confidential = TRUE.",
+# and cost $0. Otherwise the "Step 6b skipped" message.
 
 
 # ==============================================================================

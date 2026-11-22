@@ -342,8 +342,11 @@ scout
 # ( records, search_summary )" and "Context: full".
 
 # Set the budget BEFORE running (and before tuning anything).
+# final_call = TRUE: a scout that is still searching at step 12 gets one more
+# call to hand in what it has (stop reason "max_steps_final_answer"); without
+# it, a run that reaches a limit ends with no answer (see the exercises).
 scout_budget <- budget(max_steps = 12, max_tokens = 80000, max_cost = 0.05,
-                       max_seconds = 400, max_tool_errors = 3)
+                       max_seconds = 400, max_tool_errors = 3, final_call = TRUE)
 scout_budget
 
 scout_task <- paste(
@@ -375,7 +378,7 @@ answer_table <- function(items) {
   stats::setNames(as.data.frame(cols, stringsAsFactors = FALSE), fields)
 }
 
-if (ep_scout$stop_reason != "final_answer") {
+if (is.null(ep_scout$answer)) {
   message("The scout stopped with '", ep_scout$stop_reason, "' and gave no final answer. ",
           "Read the trajectory (view_episode) and see WHAT CAN GO WRONG.")
 }

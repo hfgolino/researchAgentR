@@ -388,7 +388,7 @@ c(full = count_tokens(extraversion), trimmed = count_tokens(trimmed_text))
 # Logs and error messages: the first and last lines are where the information is
 fit_log <- paste(c("Fitting model", paste("iteration", 1:300),
                    "Warning: convergence not reached"), collapse = "\n")
-cat(filter_output(fit_log, max_items = 3))
+cat(filter_output(fit_log, max_items = 3), "\n")
 # EXPECTED OUTPUT: 3 first lines, "[... 296 lines removed ...]", 3 last lines
 # (including the warning).
 

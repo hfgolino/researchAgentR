@@ -245,8 +245,11 @@ finder
 # STEP 5: RUN IT
 # ==============================================================================
 
+# final_call = TRUE: a finder that is still searching at step 14 gets one more
+# call to hand in what it has (stop reason "max_steps_final_answer"). Such an
+# answer can be partial, one more reason to check every entry (STEPS 6 and 7).
 finder_budget <- budget(max_steps = 14, max_tokens = 100000, max_cost = 0.08,
-                        max_seconds = 600, max_tool_errors = 3)
+                        max_seconds = 600, max_tool_errors = 3, final_call = TRUE)
 finder_task <- paste0(
   "Find up to 3 validated self-report instruments that measure ", construct,
   " (", population, "). For each, report the fields of the final answer.")
@@ -255,8 +258,9 @@ ep_finder <- keep("act06_finder", run(finder, finder_task, budget = finder_budge
 ep_finder
 episode_steps(ep_finder)[, c("step", "type", "name", "input", "output", "cost", "is_error")]
 view_episode(ep_finder)
-# EXPECTED OUTPUT: <episode> with stop reason final_answer (or the budget that
-# ran out), model and tool calls, billed tokens, peak context and cost; the
+# EXPECTED OUTPUT: <episode> with stop reason final_answer, or
+# max_steps_final_answer when the finder used all 14 steps and handed in what
+# it had; model and tool calls, billed tokens, peak context and cost; the
 # step table shows searches, page reads and the verify_citations call.
 
 # The structured answer as a data frame (the same helper as in Activity 03).
@@ -269,7 +273,7 @@ answer_table <- function(items) {
   stats::setNames(as.data.frame(cols, stringsAsFactors = FALSE), fields)
 }
 
-if (ep_finder$stop_reason != "final_answer") {
+if (is.null(ep_finder$answer)) {
   stop("The finder stopped with '", ep_finder$stop_reason, "' and gave no final answer. ",
        "Read the trajectory (view_episode) before raising the budget.")
 }

@@ -50,9 +50,10 @@ test_that("plain text is not parsed as HTML", {
 test_that("a namespaced tool name is matched to the tool", {
   tools <- list(list(name = "final_answer"), list(name = "search_openalex"))
   calls <- list(list(id = "1", name = "functions.final_answer"), list(id = "2", name = "search_openalex"),
-                list(id = "3", name = "functions.nope"))
+                list(id = "3", name = "functions.nope"), list(id = "4", name = "final_answer<|channel|>commentary"))
   out <- researchAgentR:::.clean_tool_calls(calls, tools)
-  expect_equal(vapply(out, `[[`, "", "name"), c("final_answer", "search_openalex", "functions.nope"))
+  expect_equal(vapply(out, `[[`, "", "name"),
+               c("final_answer", "search_openalex", "functions.nope", "final_answer"))
 })
 
 test_that("the forced tool choice follows each API's format", {

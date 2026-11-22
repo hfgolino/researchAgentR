@@ -79,8 +79,8 @@ print.agent <- function(x, ...) {
 #' @param max_tool_errors Stop after this many failed tool calls in a row.
 #' @param final_call When `max_steps` or `max_tokens` is reached by an agent
 #'   with an `output_schema`, allow one more call in which the model can only
-#'   call `final_answer`, with what it has so far (and one retry if the
-#'   provider rejects that call). The episode then stops with
+#'   call `final_answer`, with what it has so far (asked again, up to four
+#'   times, if the reply is rejected). The episode then stops with
 #'   `"max_steps_final_answer"` or `"max_tokens_final_answer"` (a forced,
 #'   possibly partial answer: check it) instead of stopping with no answer.
 #'   Useful for workers of a team.
@@ -313,14 +313,20 @@ print.context_strategy <- function(x, ...) {
 # All tools stay in the request: a provider such as Groq rejects a reply that
 # calls a tool missing from the request, and a model that has used a tool all
 # episode often calls it again. The API's tool choice forces final_answer
-# where the provider supports it; if the provider refuses the forced choice,
-# the next attempt goes without it, and other tool calls are refused in R.
+# where the provider supports it. A model that answers a forced call with
+# another tool (or none) is told why its reply was rejected and asked again;
+# if the provider refuses the forced choice itself, the next attempt goes
+# without it, and other tool calls are refused in R.
 # Every failure is recorded as a step, so the trajectory shows it.
-.final_call <- function(agent, ep, messages, tools, reason, verbose, attempts = 3) {
+.final_call <- function(agent, ep, messages, tools, reason, verbose, attempts = 4) {
+  # A model that found little tends to keep searching, so the message says
+  # that a partial or empty answer is a valid one.
   messages <- c(messages, list(list(role = "user", content = paste(
-    "The budget is used up. Call final_answer now with what you have found so far;",
-    "leave out anything you could not check. Do not call any other tool."))))
+    "The budget is used up: no other tool will run. Call final_answer now with what you have",
+    "found so far. Leave out anything you could not check; a partial answer, an empty list",
+    "or \"not found\" is a valid answer."))))
   force <- .force_tool(agent$model, "final_answer")
+  forced_rejections <- 0
   for (k in seq_len(attempts)) {
     sent <- agent$context$prepare(messages, ep)
     reply <- tryCatch(do.call(chat, c(list(sent, model = agent$model, tools = tools,
@@ -328,11 +334,23 @@ print.context_strategy <- function(x, ...) {
                       error = function(e) e)
     if (inherits(reply, "error")) {
       ep <- .record_invalid_call(ep, reply, verbose, label = "(final call rejected)")
-      if (length(force)) { force <- list(); next }   # try again without forcing the tool
-      if (!.invalid_tool_call(reply)) break          # a network or account error: stop
-      messages <- c(messages, list(list(role = "user", content = paste0(
-        "Your last reply was rejected: ", .error_line(reply), " Call only final_answer, ",
-        "with arguments that follow its schema."))))
+      # Was the MODEL's reply at fault (it called another tool, or none, or
+      # wrote arguments that do not parse), or does the provider refuse the request?
+      model_fault <- .invalid_tool_call(reply) ||
+        grepl("did not call a tool", conditionMessage(reply), ignore.case = TRUE)
+      if (!model_fault && !length(force)) break       # a network or account error: stop
+      if (length(force)) {
+        # One more forced attempt after a model fault; then, or when the
+        # provider refuses the forced choice itself, go on without it.
+        forced_rejections <- forced_rejections + 1
+        if (!model_fault || forced_rejections >= 2) force <- list()
+      }
+      if (model_fault) {
+        messages <- c(messages, list(list(role = "user", content = paste0(
+          "Your last reply was rejected: ", .error_line(reply), " No other tool can run now. ",
+          "Call final_answer, with arguments that follow its schema; a partial or empty ",
+          "answer is valid."))))
+      }
       next
     }
     reply$tool_calls <- .clean_tool_calls(reply$tool_calls, tools)
@@ -345,7 +363,8 @@ print.context_strategy <- function(x, ...) {
     for (tc in reply$tool_calls) {
       res <- if (tc$name == "final_answer") call_tool(tc, tools) else
         list(id = tc$id, name = tc$name, is_error = TRUE, value = NULL, truncated = FALSE, cost = 0,
-             latency = 0, output = "Not run: the budget is used up. Only final_answer can be called now.")
+             latency = 0, output = paste("Not run: the budget is used up. Only final_answer can be",
+                                         "called now; a partial or empty answer is valid."))
       ep <- .record_tool(ep, tc, res, verbose)
       messages <- c(messages, list(list(role = "tool", tool_call_id = tc$id, name = tc$name,
                                         content = res$output, is_error = res$is_error)))
@@ -375,12 +394,14 @@ print.context_strategy <- function(x, ...) {
 }
 
 # gpt-oss sometimes prefixes a tool name with its namespace
-# ("functions.final_answer"). A prefixed name that matches a tool is that tool.
+# ("functions.final_answer") or leaves a marker of its output format after it
+# ("final_answer<|channel|>commentary"). Such a name that matches a tool once
+# cleaned is that tool. (Some providers reject these names before R sees them.)
 .clean_tool_calls <- function(calls, tools) {
   known <- vapply(tools, `[[`, character(1), "name")
   lapply(calls, function(tc) {
     if (!is.null(tc$name) && !tc$name %in% known) {
-      bare <- sub("^(functions|tools)[.:]+", "", tc$name)
+      bare <- sub("^(functions|tools)[.:]+", "", sub("<\\|.*$", "", tc$name))
       if (bare %in% known) tc$name <- bare
     }
     tc
