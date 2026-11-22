@@ -94,7 +94,8 @@ hash_answer(c("10.1080/00273171.2020.1779642",
               "https://doi.org/10.1080/00273171.2020.1779642"), type = "doi")
 hash_answer("Multivariate Behavioral Research")
 # EXPECTED OUTPUT: two identical "md5:..." strings for the two forms of the
-# DOI, then one "md5:..." string for the journal name.
+# DOI ("md5:8bf00901edd8559feeb926474bae0925"), then one "md5:..." string for
+# the journal name ("md5:906e2ab9b7598dbebeefcd75b938f9cb").
 
 # A grader works with a hashed key exactly as with a plain one (demonstrated
 # with a DEV answer; do not try to recover held-out answers).
@@ -267,7 +268,10 @@ res <- keep("act04_eval_scout_dev", {
 res
 # EXPECTED OUTPUT: <eval_results> 18 trials of 6 tasks, the counts of passed,
 # failed and ungraded trials, errors and timeouts, and the first 10 rows
-# (task_id, trial, pass, score, cost, seconds, stop_reason).
+# (solver, task_id, trial, pass, score, cost, seconds, stop_reason).
+# Recorded run (November 22, 2026): Passed 11, failed 7, ungraded 0, errors 0,
+# timeouts 0; 15 trials stopped with final_answer, 2 with max_steps and 1
+# with max_tool_errors.
 
 summary_scout <- eval_summary(res, k = c(1, 3))
 summary_scout
@@ -275,6 +279,9 @@ summary_scout
 # success_rate, pass@1, pass^1, pass@3, pass^3, cost_per_attempt,
 # cost_per_success, p50_seconds, p95_seconds, errors, timeouts, ungraded and
 # grading_cost.
+# Recorded run (November 22, 2026): success_rate 0.6111111 (equal to pass@1
+# and pass^1), pass@3 0.6666667, pass^3 0.5, cost_per_attempt 0.001720008,
+# cost_per_success 0.002814559, p50_seconds 5.214369, p95_seconds 16.30342.
 
 # Scores are not enough: read WHY trials failed. (as.data.frame() first: the
 # print method of eval_results shows a fixed set of columns, without `reason`.)
@@ -284,6 +291,9 @@ as.data.frame(res)[!(res$pass %in% TRUE), c("task_id", "trial", "pass", "reason"
 # cannot match exactly, Step 3), and the NIH task is expected to fail (the
 # scout has no NIH tool) or to be ungraded (if NIH RePORTER cannot be reached
 # at grading time): failures of task-agent FIT, not of search skill.
+# Recorded run (November 22, 2026): 7 failed trials, none ungraded: the 3
+# journal_entropy trials, the 3 nih_ema_2025 trials ("no NIH project number in
+# the answer") and doi_entropy trial 2, which stopped with max_tool_errors.
 
 # The trajectories (every tool call) of all trials, on one HTML page:
 view_episodes("act04_episodes")
@@ -329,6 +339,9 @@ per_task
 # pass@3 and pass^3. A task with c = n has pass^3 = 1; a task that passed in
 # some trials but not all has pass@3 = 1 and pass^3 = 0: the agent CAN do it
 # but does not do it reliably. eval_summary() averages these over tasks.
+# Recorded run (November 22, 2026): c = 3 for doi_dynega, ega_origin and
+# ega_three_articles; c = 2 for doi_entropy (pass@3 = 1, pass^3 = 0); c = 0
+# for journal_entropy and nih_ema_2025.
 
 
 # ==============================================================================
@@ -356,6 +369,7 @@ summary_scout[, c("cost_per_attempt", "cost_per_success", "grading_cost")]
 # LLM judge would not be) is reported apart from the agent's runtime cost.
 # Costs are list prices ("shadow cost") even on the free tier, so runs can be
 # compared across providers.
+# Recorded run (November 22, 2026): 18 trials, 11 successes, cost 0.030960150.
 
 # Cost per task: where does the money go?
 aggregate(cbind(cost, seconds) ~ task_id, data = res, FUN = mean)

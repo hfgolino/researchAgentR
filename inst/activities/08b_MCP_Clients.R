@@ -95,6 +95,9 @@ dw
 # followed by "| session" for a legacy server; a message says when the client
 # fell back) and the server's capabilities. Server instructions, if any, are
 # marked untrusted.
+# Recorded run (November 22, 2026): server DeepWiki 4.0.2, protocol
+# 2026-07-28, capabilities logging, prompts, resources, tools, extensions,
+# and a line "Server instructions (untrusted): ...".
 
 dw$state$version
 
@@ -147,8 +150,12 @@ cat(substr(bad_repo$text, 1, 300), "\n")
 tryCatch(mcp_call(dw, "no_such_tool", list()),
          mcp_error = function(e) conditionMessage(e))
 # EXPECTED OUTPUT: for (a), is_error TRUE (or an explanatory text, depending
-# on how the server reports it); for (b), "MCP error <code>: ..." from the
-# server.
+# on how the server reports it); for (b), "MCP error <code>: ..." when the
+# server answers with a protocol error.
+# Recorded run (November 22, 2026): (a) TRUE, then "Error fetching wiki for
+# no-such-owner/no-such-repo: Repository not found. ..."; (b) no mcp_error
+# was raised: DeepWiki answered with a normal result whose is_error is TRUE
+# and whose text is "Unknown tool: 'no_such_tool'", printed as a list.
 
 
 # ==============================================================================
@@ -180,6 +187,9 @@ episode_steps(ep_repo)[, c("step", "type", "name", "is_error", "detail")]
 # EXPECTED OUTPUT: a model step, a deepwiki_ask_wiki_question tool step with the
 # server's answer (wrapped as untrusted data), and a final answer. Check the
 # function names it gives against the EGAnet documentation.
+# Recorded run (November 22, 2026): final_answer after 2 model calls and 1
+# tool call (0 errors), 1,425 billed tokens, cost $0.00044, 9.9 s; the
+# answer named dimensionStability().
 
 mcp_close(dw)   # ends the session with a legacy server; nothing to do for a modern one
 
@@ -267,6 +277,9 @@ r_ask <- chat("Using the deepwiki tool, what does the R package tidyverse/ggplot
 str(r_ask$executed_tools, max.level = 2)
 # EXPECTED OUTPUT: an item whose type names an approval request, with the
 # tool name and the arguments the model wanted to send.
+# Recorded run (November 22, 2026): two items, of type "mcp_list_tools" and
+# "mcp_approval_request"; the second had name "ask_wiki_question" and, as
+# arguments, a question and repoName "tidyverse/ggplot2".
 
 
 # ==============================================================================

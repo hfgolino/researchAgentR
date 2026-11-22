@@ -131,6 +131,10 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
   ep <- .new_episode(agent, task, budget)
   messages <- list(list(role = "system", content = .system_prompt(agent)),
                    list(role = "user", content = task))
+  # max_seconds also limits each web request of the episode, so a service
+  # that stops answering cannot hold the episode far beyond its time budget.
+  earlier <- .set_deadline(budget$max_seconds)
+  on.exit(.pkg_env$deadline <- earlier, add = TRUE)
   repeat {
     reason <- .over_budget(ep, budget)
     if (!is.null(reason)) {
@@ -147,13 +151,18 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
            effort = agent$effort),
       error = function(e) e)
     if (inherits(reply, "error")) {
-      if (!.invalid_tool_call(reply)) return(.finish(ep, messages, paste("api_error:", .plain(conditionMessage(reply)))))
+      if (!.invalid_tool_call(reply)) {
+        if (.seconds_left() < 1) return(.finish(ep, messages, "max_seconds"))   # the request ran out of time
+        return(.finish(ep, messages, paste("api_error:", .plain(conditionMessage(reply)))))
+      }
       # The provider rejected a malformed tool call (for example a tool that
       # does not exist): count it as a tool error and let the model retry.
       ep <- .record_invalid_call(ep, reply, verbose)
       messages <- c(messages, list(list(role = "user", content = paste0(
         "Your last reply was rejected: ", .error_line(reply), " Call only these tools: ",
-        paste(vapply(tools, `[[`, character(1), "name"), collapse = ", "), "."))))
+        paste(vapply(tools, `[[`, character(1), "name"), collapse = ", "), ".",
+        # gpt-oss models have called tools named "answer" or "json" at this point
+        if (!is.null(agent$output_schema)) " To give your answer, call the tool named final_answer."))))
       next
     }
     reply$tool_calls <- .clean_tool_calls(reply$tool_calls, tools)
@@ -161,6 +170,16 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
     messages <- c(messages, list(.assistant_message(reply)))
     if (length(reply$tool_calls) == 0) {
       if (is.null(agent$output_schema)) return(.finish(ep, messages, "final_answer", reply$content))
+      # A structured answer written as JSON text instead of a call to
+      # final_answer is accepted when it follows the schema.
+      as_call <- .text_as_tool_call(reply$content, "final_answer")
+      if (!is.null(as_call)) {
+        res <- call_tool(as_call, tools)
+        if (!res$is_error) {
+          ep <- .record_tool(ep, as_call, res, verbose)
+          return(.finish(ep, messages, "final_answer", res$value))
+        }
+      }
       messages <- c(messages, list(list(role = "user", content =
         "Give your final answer by calling the final_answer tool, not as plain text.")))
       next

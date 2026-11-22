@@ -126,6 +126,8 @@ attr(oa, "openalex_cost_usd")   # list price of this call against your daily bud
 # EXPECTED OUTPUT: a data frame with up to 25 rows and the common columns plus
 # cited_by_count, type and is_retracted; total_found is the number of matches
 # in OpenAlex; openalex_cost_usd is the price OpenAlex reports for the call.
+# Recorded run (November 22, 2026): 25 rows and 12 columns, total_found 7653,
+# openalex_cost_usd 0.001.
 
 # --- Crossref: the DOI registry (few abstracts, no open-access links) ----------
 cr <- search_crossref(topic, n = 25, filter = "from-pub-date:2017-01-01")
@@ -133,6 +135,7 @@ head(cr[, c("title", "year", "doi", "source")])
 mean(is.na(cr$abstract))        # share of records WITHOUT an abstract
 # EXPECTED OUTPUT: up to 25 rows; many abstracts are NA, because publishers
 # do not always deposit abstracts with Crossref.
+# Recorded run (November 22, 2026): 25 rows; 0.4 of them without an abstract.
 
 # --- Semantic Scholar (OPTIONAL: only with a key) -----------------------------
 # Without a key, requests go to one pool shared by every unauthenticated user
@@ -155,6 +158,9 @@ head(epmc[, c("title", "year", "doi", "pmid")])
 # EXPECTED OUTPUT: up to 25 rows with pmid and pmcid columns. Psychometric
 # methods papers in health journals appear here; methods papers in purely
 # psychological journals may not.
+# Recorded run (November 22, 2026): 25 rows. Five of the first six were
+# preprints (DOIs starting with 10.31234/osf.io, pmid NA), and the versions
+# of one preprint (DOIs ending in _v1, _v2) came back as separate rows.
 
 # --- arXiv: preprints ---------------------------------------------------------
 # Plain words become all:word1 AND all:word2 ..., so keep arXiv queries short:
@@ -163,11 +169,16 @@ ax <- search_arxiv("exploratory graph analysis", n = 10)
 head(ax[, c("title", "year", "doi", "oa_url")])
 # EXPECTED OUTPUT: up to 10 rows; oa_url is the PDF link (every arXiv preprint
 # is open access); doi is NA unless the authors added the published DOI.
+# Recorded run (November 22, 2026): 10 rows, doi NA in the first six. The
+# first titles (for example "Scaling Graph Clustering with Distributed
+# Sketches") matched the words but were not about psychometrics.
 
 # How many records per database?
 sapply(list(OpenAlex = oa, Crossref = cr, `Semantic Scholar` = s2,
             `Europe PMC` = epmc, arXiv = ax), nrow)
 # EXPECTED OUTPUT: a named integer vector with one count per database.
+# Recorded run (November 22, 2026): OpenAlex 25, Crossref 25, Semantic Scholar
+# 0 (no key), Europe PMC 25, arXiv 10.
 
 
 # ==============================================================================
@@ -191,6 +202,8 @@ head(cites[, c("title", "year", "cited_by_count")])
 # refs is the length of the reference list in OpenAlex. Snowballing finds
 # studies that keyword searches miss, because it follows the authors'
 # own citations instead of your search terms.
+# Recorded run (November 22, 2026): 25 references returned, total_found 90;
+# the first (most cited) citing work had cited_by_count 314.
 
 
 # ==============================================================================
@@ -203,6 +216,9 @@ find_open_access(c(dynega_doi, entropy_doi))
 # EXPECTED OUTPUT: two rows with is_oa (TRUE/FALSE), oa_status, oa_url,
 # license, version and checked_with ("Unpaywall" or "OpenAlex"). A DOI that
 # could not be checked keeps its row, with the reason in `detail`.
+# Recorded run (November 22, 2026): both is_oa TRUE; "hybrid" (publisher,
+# publishedVersion) and "green" (repository, submittedVersion), license
+# cc-by, checked_with "Unpaywall".
 
 
 # ==============================================================================
@@ -250,7 +266,12 @@ table(deduped$n_found)                    # how many databases found each record
 head(deduped[order(-deduped$n_found), c("title", "year", "database", "n_found")])
 # EXPECTED OUTPUT: a message with records in, duplicates removed by DOI and by
 # title and year, and records out; a table of n_found (most records are found
-# once; the central papers are found by several databases).
+# once). n_found counts the records merged into a row, so it can exceed the
+# number of databases when one database returns several versions of a work.
+# Recorded run (November 22, 2026): 135 records in, 18 duplicates removed (11
+# by DOI, 7 by title and year), 117 out; n_found was 1 for 103 records, 2 for
+# 11, 3 for 2 and 4 for 1. The row with n_found 4 lists "OpenAlex; Europe
+# PMC", and one row with n_found 3 lists only "Crossref".
 
 
 # ==============================================================================
@@ -269,10 +290,12 @@ prisma <- prisma_counts(all_records, deduped, screening = screen)
 prisma
 # EXPECTED OUTPUT: a data frame with columns stage, database and n: one
 # "Records identified" row per source (OpenAlex, Crossref, Europe PMC, arXiv,
-# Citation searching, and Semantic Scholar when it was searched), the total, duplicates removed,
-# records after removing duplicates, records screened, excluded, awaiting a
-# human decision, and retained. Every number comes from R objects, so an
-# agent cannot report counts that the code did not produce.
+# Citation searching, and Semantic Scholar when it was searched), the total,
+# duplicates removed, records after removing duplicates, records screened,
+# excluded, awaiting a human decision, and retained. Every number comes from
+# R objects, so an agent cannot report counts that the code did not produce.
+# Recorded run (November 22, 2026): 135 identified, 18 duplicates removed,
+# 117 screened: 42 excluded, 10 awaiting a human decision, 65 retained.
 
 
 # ==============================================================================
@@ -338,8 +361,10 @@ scout <- agent(
 )
 scout
 # EXPECTED OUTPUT: <agent> literature_scout | groq:openai/gpt-oss-120b, the
-# instructions (shortened), the 8 tool names, "Final answer: structured
-# ( records, search_summary )" and "Context: full".
+# description, the instructions (shortened), the 7 tool names
+# (search_openalex, search_crossref, search_europepmc, search_arxiv, snowball,
+# find_open_access, verify_citations; 8 with a Semantic Scholar key), "Final
+# answer: structured ( records, search_summary )" and "Context: full".
 
 # Set the budget BEFORE running (and before tuning anything).
 # final_call = TRUE: a scout that is still searching at step 12 gets one more
@@ -362,11 +387,19 @@ ep_scout
 # max_seconds if a budget ran out), the number of model and tool calls (and
 # tool errors), billed tokens, peak context, cost and seconds, and the start
 # of the answer.
+# Recorded run (November 22, 2026): final_answer after 6 model calls and 6
+# tool calls (1 error); 28,934 tokens billed (6,912 cached), peak context
+# about 5,566, cost $0.00488, 25.3 s.
 
 episode_steps(ep_scout)[, c("step", "type", "name", "input", "output", "cost", "is_error")]
 view_episode(ep_scout)     # the full trajectory as an HTML page (Lens, Activity 01)
-# EXPECTED OUTPUT: one row per step, alternating model calls and tool calls;
-# the last model call calls final_answer when the run succeeded.
+# EXPECTED OUTPUT: one row per step, model calls and tool calls, usually
+# alternating; when the run succeeded, the last model call calls final_answer
+# and the last row is the tool row final_answer.
+# Recorded run (November 22, 2026): 12 rows (6 model, 6 tool). Step 9 is
+# "(invalid tool call)" with is_error TRUE: a call by the model was rejected
+# ("Tool call validation failed"); the model then wrote its answer as plain
+# text (step 10) and called final_answer at step 11.
 
 # Turn the structured answer (a list of records) into a data frame.
 answer_table <- function(items) {
@@ -388,8 +421,12 @@ if (nrow(scout_records)) {
   print(scout_records[, c("title", "year", "doi")])
   cat(ep_scout$answer$search_summary, "\n")
 }
-# EXPECTED OUTPUT: a data frame with title, year, doi and why_relevant, one row
-# per reported work (at most 8), and the agent's own summary of its searches.
+# EXPECTED OUTPUT: a data frame with title, year and doi, one row per reported
+# work (at most 8; why_relevant stays in scout_records), and the agent's own
+# summary of its searches.
+# Recorded run (November 22, 2026): 8 works published from 2017 to 2024, the
+# first with DOI 10.1371/journal.pone.0174035; the summary named two OpenAlex
+# queries.
 
 
 # ==============================================================================
@@ -499,6 +536,9 @@ attr(claim_judged, "cost")
 # EXPECTED OUTPUT: the altered quote stays "quote_not_found" (no model call is
 # spent on it); the found quote gets "supported", "not_supported" or "unclear"
 # with a one-sentence reason. The cost attribute is the price of the judge calls.
+# Recorded run (November 22, 2026): the found quote was judged "not_supported"
+# (the sentence picked by keyword only says that prior research used LDA for
+# topic estimation); the cost attribute was 8.565e-05.
 
 
 # ==============================================================================

@@ -101,6 +101,9 @@ table(docs$section)
 # EXPECTED OUTPUT: paragraphs per section: the title block (with the license
 # notice), Abstract, Introduction (excerpt), Methods (excerpt), Empirical
 # validation, Participants, Materials, Analyses, Results and References.
+# The counts are 7 for the Introduction, 7 for the Methods, 4 for Results,
+# 29 for References and 1 for each of the other six; table() prints the
+# sections in alphabetical order, with their full titles.
 
 # Reviewers read sections on demand instead of receiving the whole paper in
 # their prompt: just-in-time context, and the lead never holds the full text.
@@ -119,8 +122,10 @@ section_tool <- define_tool(
 section_tool
 cat(substr(call_tool("read_section", list(section_tool),
                      arguments = list(section = "Abstract"))$output, 1, 400))
-# EXPECTED OUTPUT: the tool with one enum argument, then the start of the
-# abstract wrapped in <tool_output ... trust="untrusted">: the manuscript is
+# EXPECTED OUTPUT: the tool with one enum argument (the printout shows it as
+# "section (string): The exact section title" and ends with
+# "[ output untrusted ]"), then the start of the abstract wrapped in
+# <tool_output tool="read_section" trust="untrusted">: the manuscript is
 # data for the model, never instructions.
 
 
@@ -234,6 +239,10 @@ ep_team
 # EXPECTED OUTPUT: one tool call per delegated task (lines such as
 # "[section_reviewer] final_answer | ... model calls | $..."), then the lead's
 # final answer. The episode cost INCLUDES the workers' costs.
+# Recorded run (November 22, 2026): 8 delegated tasks (7 to section_reviewer,
+# 1 to consistency_checker; 2 workers stopped with max_steps), one invalid
+# tool call, then final_answer: 9 model calls, 10 tool calls (1 with an
+# error), 22,055 billed tokens, cost $0.01380, 45.3 s.
 
 team_issues <- do.call(rbind, lapply(ep_team$answer$issues, as.data.frame))
 head(team_issues[, c("section", "category", "severity", "quote")], 10)
@@ -244,6 +253,8 @@ workers_df[, c("agent", "called_as_tool", "stop_reason", "model_calls", "tokens"
 c(lead_episode_total = episodes_df(ep_team)$cost, sum_of_workers = sum(workers_df$cost))
 # EXPECTED OUTPUT: one row per worker call; the lead episode's total is the
 # workers' sum plus the lead's own model calls.
+# Recorded run (November 22, 2026): 8 rows (6 final_answer, 2 max_steps);
+# lead_episode_total 0.013796625 and sum_of_workers 0.009404325.
 
 # Open one worker's trajectory from the parent's tool step:
 child_ids <- unlist(lapply(ep_team$steps, function(s) if (s$type == "tool") s$child_episode))
@@ -266,6 +277,9 @@ summary(fan)
 # cost, seconds), then the total cost, the summed time and the wall-clock
 # time. With the mirai package installed, wall-clock time is below the summed
 # time; the COST is the same either way.
+# Recorded run (November 22, 2026): "<fan_out> 8 tasks | 0 failed", but only
+# 1 task stopped with final_answer (4 with max_steps, 3 with
+# max_tool_errors); total cost $0.00294, summed time 13.2 s, wall-clock 4.2 s.
 
 fan_issues <- do.call(rbind, lapply(fan, function(e)
   if (length(e$answer$issues)) do.call(rbind, lapply(e$answer$issues, as.data.frame))))
@@ -303,6 +317,8 @@ crit
 c(rounds = crit$rounds, approved = crit$approved, cost = crit$cost)
 # EXPECTED OUTPUT: "<critique_loop> N round(s) | approved (or max_rounds) |
 # cost $...", the critic's feedback for each round and the final answer.
+# Recorded run (November 22, 2026): "<critique_loop> 2 round(s) | approved |
+# cost $0.00172"; the last line showed approved as 1 (TRUE as a number).
 
 
 # ==============================================================================
@@ -326,6 +342,9 @@ print(rv_checks, n = Inf)
 # when it is installed). Rows: citations without a reference entry, reference
 # entries not cited, DOIs not found, p-values that do not match, and
 # style-rule hits with the exact sentence quoted.
+# Recorded run (November 22, 2026): 8 suggestions (2 high, 2 medium, 4 low):
+# 1 citation without an entry, 1 DOI not found, 1 p-value (recomputed p =
+# 0.0242), 1 banned word, 4 em dashes; none for entries not cited.
 
 review_report(rv_checks, "review_checks.html")
 # browseURL("review_checks.html")
@@ -372,6 +391,8 @@ key[, c("id", "type", "caught_by_checks")]
 # sample size (2) and the overclaim (4) need reading, by a person or a model.
 # Offline, every DOI lookup fails; read the notes of the review before
 # trusting any DOI row (see WHAT CAN GO WRONG).
+# Recorded run (November 22, 2026): grades showed caught 4, recall 0.6666667,
+# false_alarms 0, pre_existing 2 and cost 0.
 
 # Look at the pre-existing flags: some are real problems of the published
 # text (in-text "Deepseek" versus the entry "DeepSeek-AI"), some are limits
@@ -394,6 +415,9 @@ attr(rv_model, "cost")
 # EXPECTED OUTPUT: rows from "check" and from "model"; the counts show how
 # many model suggestions were made, how many were DROPPED because their quote
 # is not in the text, how many were merged, and failed calls.
+# Recorded run (November 22, 2026): 63 suggestions (8 from checks, 55 from
+# the model); counts: 59 model suggestions, 2 quotes dropped, 2 merged, 0
+# failed calls; cost 0.01059675.
 
 head(attr(rv_model, "dropped")[, c("section", "quote", "suggestion")])
 review_report(rv_model, "review_model.html")
@@ -422,6 +446,9 @@ grades
 table(source = rv_model$source, matched_planted_error = !is.na(rv_model$error_id))
 # EXPECTED OUTPUT: a second row in `grades` (false_alarms counts check rows
 # only) and a table of matched versus other rows by source.
+# Recorded run (November 22, 2026): the second row showed caught 5, recall
+# 0.8333333, false_alarms 0, pre_existing 2, cost 0.01059675; in the table,
+# 6 of 8 check rows and 1 of 55 model rows matched a planted error.
 
 
 # ==============================================================================
@@ -449,6 +476,10 @@ cmp <- compare_single_vs_team(single_reviewer, review_team,
 cmp[, c("arm", "stop_reason", "model_calls", "tool_calls", "tokens", "peak_context", "cost", "seconds")]
 # EXPECTED OUTPUT: four rows (single, single, team, team) with the stop
 # reason and the ledger of each episode.
+# Recorded run (November 22, 2026): all four stopped with final_answer; both
+# single rows showed 10 model calls and 37094 tokens (the second with cost 0
+# and about 0.05 seconds); the team rows showed 7 and 8 model calls, 15940
+# and 19868 tokens, and costs 0.008301225 and 0.007947600.
 
 # Grade each episode's answer with the same patterns (no functions):
 eps <- c(attr(cmp, "episodes")$single, attr(cmp, "episodes")$team)
@@ -469,6 +500,9 @@ aggregate(cbind(caught, n_issues, cost, tokens) ~ arm, data = cmp, FUN = mean)
 # tokens per episode, then the mean of each arm. Decide with these numbers,
 # not with impressions: does the team catch more, and at what price per
 # planted error caught?
+# Recorded run (November 22, 2026): single caught 4 and 4 (7 issues each),
+# team caught 2 and 1 (12 and 11 issues); arm means: single 4.0 caught at
+# cost 0.002918325, team 1.5 caught at cost 0.008124413.
 
 # Put all methods side by side (cost per planted error caught):
 arm_means <- aggregate(cbind(caught, cost) ~ arm, data = cmp, FUN = mean)

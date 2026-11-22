@@ -388,6 +388,10 @@ ep_short$answer
 # EXPECTED OUTPUT: "max_steps" and NULL. The model asked for a tool, R ran it,
 # but the budget allowed no second model call to read the result. The
 # ledger still records the cost of the step that was used.
+# Recorded run (November 22, 2026): one model step and one tool step, then
+# "Stopped: max_steps". The model step showed $0.00000 with the same 713
+# input and 167 output tokens as step 1 in STEP 5: the request was identical,
+# so the response was replayed from the cache, and a replay is not billed.
 
 # (c) max_tool_errors: a tool that always fails. The run stops after N
 #     failed tool calls in a row instead of retrying forever.
@@ -405,8 +409,10 @@ episode_steps(ep_errors)[, c("step", "type", "name", "is_error", "detail")]
 
 # EXPECTED OUTPUT: usually "max_tool_errors": two tool rows with is_error TRUE
 # and the detail "Error while running lookup_norms: the norms server is not
-# responding". A model may instead give up after the first error and explain
-# that the service failed (stop reason "final_answer"); both are recorded.
+# responding" (when the model repeats the same call, the second detail adds
+# "[Note: this exact call was already made 1 time(s) ..."). A model may
+# instead give up after the first error and explain that the service failed
+# (stop reason "final_answer"); both are recorded.
 #
 # The other stop reasons: "max_tokens", "max_cost", "max_seconds" (the other
 # budget limits) and "api_error: <message>" (for example a 429 that persisted
@@ -521,7 +527,8 @@ ep_claude <- keep("loop_planner_pilot_claude", run(planner_claude, task_pilot, b
 # loop on a laptop can take minutes per task, see Activity 11):
 planner_local <- agent(name = "study_planner_local", instructions = planner$instructions,
                        model = "ollama:qwen3:4b", tools = tools,
-                       effort = "none")   # no long thinking: much faster on a laptop
+                       effort = "none")   # thinking off where the model allows it (qwen3:4b
+                                          # exists only as a thinking model: expect a minute or more)
 ep_local <- keep("loop_planner_pilot_local", run(planner_local, task_pilot, budget = b))
 
 episodes_df(list(ep_pilot, ep_claude, ep_local))
@@ -530,6 +537,11 @@ episodes_df(list(ep_pilot, ep_claude, ep_local))
 # Small local models make more tool-call mistakes (wrong argument types,
 # invented tool names); the error observations of STEP 4 let them recover,
 # and Day 3 measures how often they do.
+# Recorded run (November 22, 2026): three rows, all final_answer.
+# gpt-oss-120b: 3 model and 2 tool calls, 2857 tokens, cost 0.00062, 1.5 s;
+# claude-haiku-5-5: 3 and 2, 5620 tokens, cost 0.00055, 5.6 s; qwen3:4b: 2
+# and 2, 10269 tokens, cost 0, 155 s (its trace shows cohens_d_from_summary
+# twice and no call to sample_size_t).
 
 
 # ==============================================================================
@@ -580,6 +592,14 @@ episodes_df(list(ep_pilot, ep_claude, ep_local))
 #   ends the episode with stop reason "api_error: ...".
 # - "404 ... Check the model name": the model was retired; see
 #   list_provider_models("groq").
+# - A step named "(invalid tool call)": the provider rejected the model's
+#   reply before R saw it (a call to a tool that does not exist, such as
+#   "json" or "answer", or arguments that are not valid JSON). The loop tells
+#   the model why and asks again. Each one uses a step and counts as a tool
+#   error; several in a row end the episode with "max_tool_errors".
+# - "[Note: this exact call was already made ...]" at the end of a tool
+#   result: the model repeated a call with the same arguments. The call runs
+#   again, and the note tells the model so, which often ends the loop.
 # - define_tool() error "These arguments are not arguments of the function":
 #   the names in args must match the R function's argument names exactly.
 # - A required argument without a default in the R function, declared with

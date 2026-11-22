@@ -172,8 +172,10 @@ use_cache(old_cache)
 check_network(res_strong)
 res_strong
 # EXPECTED OUTPUT: <eval_results> 9 trials of 3 tasks, with the number passed,
-# failed and ungraded, and one row per trial (task_id, trial, pass, cost,
-# seconds, stop_reason).
+# failed and ungraded, and one row per trial (solver, task_id, trial, pass,
+# score, cost, seconds, stop_reason). Recorded run (November 22, 2026):
+# passed 9, failed 0, ungraded 0; every trial stopped with final_answer,
+# cost between 0.00033 and 0.00056 dollars and took 0.8 to 1.7 seconds.
 
 
 # ==============================================================================
@@ -197,11 +199,15 @@ eval_summary(list(res_strong, res_small), k = c(1, 3))
 # p50/p95 seconds. The difference in success_rate is the quality loss. On
 # three easy lookup tasks the small model may lose little or nothing: that is
 # a result too (the small model is enough for this job), and the cost column
-# then decides.
+# then decides. Recorded run (November 22, 2026): success_rate 1 and pass^3 1
+# for both solvers; cost per success 0.00041 (strong) and 0.00022 (small)
+# dollars; p50 1.09 and 1.02 seconds, p95 1.67 and 1.59 seconds.
 
 task_compare(res_strong, res_small)
 # EXPECTED OUTPUT: one row per task with the strong (a) and small (b) success
 # rates over 3 trials, their difference, and "gain", "regression" or "same".
+# Recorded run (November 22, 2026): a = 1, b = 1, diff 0 and "same" for all
+# three tasks.
 
 # Look at a failed trajectory, not only at the score:
 as.data.frame(res_small)[!res_small$pass %in% TRUE, c("task_id", "trial", "answer", "stop_reason")]
@@ -209,7 +215,8 @@ as.data.frame(res_small)[!res_small$pass %in% TRUE, c("task_id", "trial", "answe
 # small model passed every trial). Typical failures of small models: a DOI
 # copied with a typo, the DOI of a similar paper, an answer with extra text
 # around it, a malformed tool call (stop_reason "max_tool_errors"), or
-# running out of steps or tokens.
+# running out of steps or tokens. Recorded run (November 22, 2026): zero
+# rows ("<0 rows> (or 0-length row.names)").
 
 
 # ==============================================================================
@@ -289,12 +296,19 @@ task_compare(res_small, res_harness)
 # pass^3, and at what cost in tokens and seconds (retries take both).
 # task_compare() shows which tasks gained and which regressed. With 3 tasks
 # and 3 trials, a difference of one trial is noise: treat this as a pilot.
+# Recorded run (November 22, 2026): success_rate 1 and pass^3 1 for all three
+# solvers, so there was no gap to close; "small + harness" cost 0.000196
+# dollars per success, with p50 1.17 and p95 4.65 seconds (four of its
+# trials waited 3 s on a retry backoff); every task was "same".
 
 # How often did the verification step send an answer back?
 retried <- vapply(strsplit(res_harness$episode_id, ";"), length, integer(1)) > 1
 table(retried, passed = res_harness$pass)
-# EXPECTED OUTPUT: a 2 x 2 table of trials with and without a retry, by pass.
-# Retries that end in a pass are the quality the harness recovered.
+# EXPECTED OUTPUT: a table of trials with and without a retry, by pass (at
+# most 2 x 2: table() shows only the values that occur). Retries that end in
+# a pass are the quality the harness recovered. Recorded run (November 22,
+# 2026): one cell, retried FALSE and passed TRUE, with 9 trials: the
+# verification step never sent an answer back.
 
 
 # ==============================================================================
@@ -486,7 +500,10 @@ chunks <- chunk_documents(docs, chunk_words = 250, overlap = 40)
 nrow(chunks)
 summary(chunks$words)
 # EXPECTED OUTPUT: paragraphs per file, then the number of chunks of up to
-# 250 words. A file that could not be read is reported in a warning.
+# 250 words and a summary of their word counts. A file that could not be
+# read is reported in a warning. With the toy library, poster.pdf included
+# (computed offline): 3, 5 and 1 paragraphs, 5 chunks, and 10 to 24 words
+# per chunk (median 21).
 
 
 # ==============================================================================
@@ -551,7 +568,9 @@ attr(E_toy, "usage")
 round(cosine_similarity(E_toy[1:3, ]), 2)
 # EXPECTED OUTPUT: 8 rows (one per chunk) and as many columns as the model's
 # dimensions; usage with tokens and cost 0 (local); a 3 x 3 similarity
-# matrix with 1 on the diagonal.
+# matrix with 1 on the diagonal. Recorded run (November 22, 2026): 8 x 768,
+# 195 tokens in 1 request, and similarities of 0.76 (chunks 1 and 2) and
+# 0.61 (chunk 3 with chunks 1 and 2).
 
 # The same store as Step 9, now with your own passages and local vectors
 toy_store <- vector_store(toy_chunks$text, embeddings = E_toy,
@@ -572,6 +591,9 @@ hits[, c("rank", "score", "file", "section", "paragraphs")]
 # EXPECTED OUTPUT: the 3 most similar chunks with file, section (or page) and
 # paragraph range. With the toy library, the Results chunk of pilot_notes.md
 # (alpha and test-retest) should rank high. The query is embedded locally.
+# Recorded run (November 22, 2026): rank 1 pilot_notes.md, Results, 3-4
+# (score 0.6512); rank 2 lab_meeting.txt, 1-3 (0.6494); rank 3
+# pilot_notes.md, Method, 1-2 (0.6323).
 
 
 # ==============================================================================
@@ -595,6 +617,10 @@ cat(found$output)
 # pilot_notes.md (alpha .81, test-retest .74) and the lab_meeting.txt
 # passage about ordinal items should be among them. This is exactly the text
 # the librarian agent of Step 12 would receive from its tool.
+# Recorded run (November 22, 2026): [1] lab_meeting.txt (similarity 0.69),
+# [2] pilot_notes.md, Results (0.64), [3] poster.pdf (0.55) and [4]
+# pilot_notes.md, Method (0.53), between <tool_output ...> tags with
+# trust="untrusted".
 
 # A readable log of the question and the passages (open it in any editor)
 log_file <- file.path("results", "library_notes.md")
@@ -639,6 +665,9 @@ episode_steps(ep_lib)[, c("step", "type", "name", "latency", "detail")]
 # section] citations. With the toy library, a correct answer gives alpha .81
 # and test-retest .74 [pilot_notes.md, Results] and the open question about
 # ordinal items [lab_meeting.txt].
+# Recorded run (November 22, 2026): two retrieve calls, then the answer (5
+# steps); it gave .81, .74 and the open question, but the citations came in
+# parentheses, not square brackets: "(pilot_notes.md, section *Results*)".
 
 # Verify in code: which library files does the answer cite?
 answer_text <- if (is.character(ep_lib$answer)) ep_lib$answer else ""
@@ -649,6 +678,7 @@ length(cited) > 0
 # EXPECTED OUTPUT: the file names that appear in the answer, and TRUE if at
 # least one does. An answer without citations fails the librarian's rule.
 # (A citation shows WHERE to look; reading the passage is still your job.)
+# Recorded run (November 22, 2026): "lab_meeting.txt" "pilot_notes.md", TRUE.
 
 # What left the computer? The embeddings are local; the agent's model is not:
 c(agent = ep_lib$model, embeddings = lib$model)

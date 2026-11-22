@@ -61,6 +61,8 @@ r
 # EXPECTED OUTPUT: "<llm_response> groq:openai/gpt-oss-20b", possibly a short
 # "Reasoning:" line (gpt-oss models think before answering), the two-sentence
 # answer, and a line "Tokens: N in (0 cached), M out | cost $... | ... s".
+# Recorded run (November 22, 2026): "Tokens: 88 in (0 cached), 195 out | cost
+# $0.000065 | 0.33 s".
 
 # The response is a list. The parts every activity uses:
 r$content       # the answer text
@@ -73,6 +75,8 @@ r$cached        # TRUE when the response was replayed from the cache
 # EXPECTED OUTPUT: the text; a list with five token counts (reasoning tokens
 # are part of output); a small number (dollars); a number of seconds; the model
 # string; FALSE on the first run and TRUE on later runs (replayed from disk).
+# Recorded run (November 22, 2026): input 88, output 195 (reasoning 121),
+# cost 6.51e-05, latency 0.333, cached FALSE.
 
 # ask() is the shortcut when only the text matters. The full response is
 # still attached, so nothing is lost:
@@ -87,9 +91,13 @@ r_sys <- chat(question, model = "groq:openai/gpt-oss-20b",
               max_tokens = 1000, effort = "low")
 r_sys$usage$output
 
-# EXPECTED OUTPUT: three numbered threats; the usage list of that call; the
-# number of output tokens of the system-prompt call (with effort = "low" the
-# model usually spends fewer reasoning tokens).
+# EXPECTED OUTPUT: three threats, one per line (numbered or not); the usage
+# list of that call; the number of output tokens of the system-prompt call
+# (with effort = "low" the model usually spends fewer reasoning tokens).
+# Recorded run (November 22, 2026): Selection bias, History, Maturation, not
+# numbered; usage with output 197, of which reasoning 181; 92 output tokens
+# for the system-prompt call (the first call of STEP 1, at default effort,
+# used 195).
 
 
 # ==============================================================================
@@ -137,11 +145,13 @@ r_claude <- chat(question, model = "anthropic:claude-haiku-5-5")
 r_claude
 # OPTIONAL, LOCAL AND FREE (needs Ollama and `ollama pull qwen3:4b`; slow on
 # most laptops, see Activity 11):
-r_local <- chat(question, model = "ollama:qwen3:4b", effort = "none")   # "none": no long thinking
+r_local <- chat(question, model = "ollama:qwen3:4b", effort = "none")   # "none": thinking off, where the model allows it
 r_local
 
 # EXPECTED OUTPUT: the same kind of response object. The local model reports
 # cost $0 (your own computer) and usually a longer latency on a laptop.
+# Recorded run (November 22, 2026): claude-haiku-5-5, 33 in, 109 out, cost
+# $0.000058, 0.86 s; qwen3:4b, 28 in, 260 out, cost $0.000000, 6.33 s.
 
 
 # ==============================================================================
@@ -213,6 +223,10 @@ ep_120b
 # EXPECTED OUTPUT: "<episode> <id> | web_scout | groq:openai/gpt-oss-120b",
 # the task, "Stop reason: final_answer | 1 model calls, 0 tool calls (0
 # errors)" or similar, the token, cost and time totals, and the answer.
+# Recorded run (November 22, 2026): "Tokens: 24,405 billed (768 cached), peak
+# context ~189 | cost $0.00369 | 3.2 s", then a line "Provider-side tool
+# calls: 2 (any per-call fee is not in the cost; see ?budget)", then the
+# answer, with DOI 10.1371/journal.pone.0174035.
 
 ep_120b$stop_reason
 cat(ep_120b$answer)
@@ -230,21 +244,25 @@ searches
 length(searches)
 
 # EXPECTED OUTPUT: one entry per built-in tool call Groq ran (the type name
-# Groq reports for each search), and how many there were. Compare the input tokens of
-# the step with count_tokens(research_question): the difference is text the
-# provider added (instructions, tool definitions, search results).
+# Groq reports for each call), and how many there were. Compare the input
+# tokens of the step with count_tokens(research_question), which returns 40:
+# the difference is text the provider added (instructions, tool definitions,
+# search results).
+# Recorded run (November 22, 2026): "browser_search" and "browser.open", so
+# 2 calls; the step had 24,222 input tokens (768 of them cached).
 count_tokens(research_question)
 
 # A NOTE ON COST: the ledger prices the model's tokens at list price. If the
-# provider lists a separate fee per search on its pricing page
-# (https://groq.com/pricing), researchAgentR 0.1.0 does NOT add it
-# automatically. Add it by hand: look up the fee and multiply.
+# provider charges a separate fee per search, researchAgentR does NOT add it
+# automatically (Groq's public pages listed no such fee on November 22, 2026;
+# check your account's pricing). Add it by hand: look up the fee and multiply.
 search_fee <- NA_real_   # US dollars per search: fill in from the pricing page
+n_searches <- sum(grepl("search", searches))   # "browser.open" opens a page: not a search
 episode_cost <- sum(episode_steps(ep_120b)$cost, na.rm = TRUE)
-episode_cost + length(searches) * search_fee
+episode_cost + n_searches * search_fee
 
-# EXPECTED OUTPUT: the token cost of the episode; NA until search_fee is set
-# (an unknown cost stays NA, never zero).
+# EXPECTED OUTPUT: NA until search_fee is set (an unknown cost stays NA, never
+# zero); with a fee filled in, the token cost of the episode plus the fees.
 
 
 # ==============================================================================
@@ -269,6 +287,9 @@ plot_episode(ep_120b, what = "context")   # tokens SENT at each model call
 # EXPECTED OUTPUT: three figures. With a single model call each shows one bar
 # or one point; Activity 02 builds agents with several steps, where the
 # context line climbs at every step because the whole conversation is resent.
+# Recorded run (November 22, 2026): with its single model call, the context
+# figure also printed the ggplot2 message "`geom_line()`: Each group consists
+# of only one observation." (a message, not an error).
 
 
 # ==============================================================================
@@ -315,6 +336,9 @@ episodes_df(list(ep_120b, ep_20b))
 # model_calls, tool_calls, tool_errors, tokens, cache_read, peak_context,
 # cost, seconds, started. Compare tokens, cost and seconds; then READ both
 # answers: a cheaper run is only better if its answer is still right.
+# Recorded run (November 22, 2026): both rows final_answer with 1 model call;
+# gpt-oss-120b 24405 tokens, cost 0.0036855, 3.18 s; gpt-oss-20b 24432
+# tokens, cost 0.00187965, 3.74 s; both answers gave the same DOI.
 cat(ep_20b$answer)
 
 # The same table from the folder of saved files:

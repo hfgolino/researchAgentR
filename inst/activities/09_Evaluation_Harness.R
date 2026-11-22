@@ -176,11 +176,16 @@ res_v1
 # EXPECTED OUTPUT: <eval_results> 20 trials of 4 tasks, a line with the counts
 # of passed, failed and ungraded trials, errors and timeouts, then the first
 # 10 rows (solver, task_id, trial, pass, score, cost, seconds, stop_reason).
+# Recorded run (November 22, 2026): "Passed 15, failed 5, ungraded 0 |
+# errors 0 | timeouts 0".
 
 table(res_v1$task_id, res_v1$pass, useNA = "ifany")   # successes per task
 table(res_v1$stop_reason)                              # how did the trials end?
 # EXPECTED OUTPUT: a tasks x pass table (NA = ungraded), and a count of stop
 # reasons (final_answer, max_steps, api_error: ..., and so on).
+# Recorded run (November 22, 2026): doi_dynega, doi_entropy and
+# journal_entropy passed 5 of 5 trials, nih_ema_2025 passed 0 of 5; all 20
+# trials stopped with final_answer.
 
 
 # ==============================================================================
@@ -192,6 +197,8 @@ summary_v1
 # EXPECTED OUTPUT: one row with tasks, trials, success_rate, pass@1, pass^1,
 # pass@3, pass^3, pass@5, pass^5, cost_per_attempt, cost_per_success,
 # p50_seconds, p95_seconds, errors, timeouts, ungraded and grading_cost.
+# Recorded run (November 22, 2026): success_rate, pass@k and pass^k all 0.75
+# (each task passed 5 of 5 or 0 of 5 trials); cost_per_success 0.000281655.
 #
 # Read it as a researcher:
 #   success_rate      share of graded trials that passed
@@ -247,6 +254,8 @@ failed <- as.data.frame(res_v1)[res_v1$pass %in% FALSE, c("task_id", "trial", "a
 failed
 # EXPECTED OUTPUT: one row per failed trial with the grader's reason. Zero rows
 # means every graded trial passed (then pick a trial with the highest cost).
+# Recorded run (November 22, 2026): 5 rows, all nih_ema_2025 with the answer
+# 5R37AG057685-07 and a reason ending in "R37AG057685 not verified".
 
 if (nrow(failed) > 0) {
   ep_file <- file.path(EP_DIR, "v1", paste0(failed$episode_id[1], ".json"))
@@ -257,6 +266,9 @@ if (nrow(failed) > 0) {
 # EXPECTED OUTPUT: the steps of the failed trial (model calls and tool calls,
 # with errors marked) and an HTML page in the browser. Write down, in one
 # sentence, where the trial went wrong.
+# Recorded run (November 22, 2026): 3 steps without errors: a model call to
+# nih_reporter, its result ("626 matching projects; showing 5"), and the
+# answer 5R37AG057685-07, the first project listed.
 
 
 # ==============================================================================
@@ -278,7 +290,8 @@ RUBRIC <- paste(
 judge <- grader_judge(RUBRIC, model = "groq:openai/gpt-oss-120b")
 judge
 # EXPECTED OUTPUT: <grader> judge groq:openai/gpt-oss-120b rubric <12-character
-# hash>, then the model, the hash and the rubric text.
+# hash>, then the model, the hash and the rubric text. With the RUBRIC above,
+# the hash is 890405b90dd7.
 
 # Tasks written for this activity (instructions only; no fixed answer key)
 design_tasks <- task_set(
@@ -306,6 +319,9 @@ eval_summary(res_judge, k = 1)[, c("success_rate", "cost_per_attempt", "grading_
 # EXPECTED OUTPUT: 9 rows (3 tasks x 3 trials) with the judge's verdict and
 # reason, the agent's runtime cost and the judge's grading cost in separate
 # columns; the summary keeps grading_cost apart from cost_per_attempt.
+# Recorded run (November 22, 2026): 8 of 9 answers passed (success_rate
+# 0.8888889; the fail was measure_loneliness, trial 1); cost_per_attempt
+# 7.894167e-05 and grading_cost 0.002154.
 
 # --- Calibration: a judge is only as good as its agreement with humans ------
 # Cohen's kappa = (p_o - p_e) / (1 - p_e), where p_o is the observed agreement
@@ -370,13 +386,19 @@ res_v2 <- keep("eval09_finder_v2", fresh_trials(
            save_dir = file.path(EP_DIR, "v2"), name = "finder v2")))
 
 eval_summary(list(res_v1, res_v2), k = c(1, 3))
-# EXPECTED OUTPUT: two rows (finder v1, finder v2) with the columns of STEP 5.
+# EXPECTED OUTPUT: two rows (finder v1, finder v2) with the columns of STEP 5
+# (without pass@5 and pass^5, because k = c(1, 3) here).
+# Recorded run (November 22, 2026): v1 success_rate 0.75, pass^3 0.750,
+# cost_per_success 0.0002816550; v2 success_rate 0.65, pass@3 0.75, pass^3
+# 0.525, cost_per_success 0.0003374885, 1 timeout, p95_seconds 42.019695.
 
 # Tasks differ much more in difficulty than versions do, so compare TASK BY
 # TASK (each task's success rate under v2 minus under v1):
 task_compare(res_v1, res_v2)
 # EXPECTED OUTPUT: task_id, a (v1), b (v2), diff and change ("gain",
 # "regression" or "same") for each of the 4 tasks.
+# Recorded run (November 22, 2026): doi_dynega went from 1 to 0.6
+# ("regression"); the other three tasks were "same" (1, 1 and 0 in both).
 
 paired_bootstrap(res_v1, res_v2, R = 2000)
 pb_cost <- paired_bootstrap(res_v1, res_v2, metric = "cost", R = 2000)
@@ -388,6 +410,9 @@ signif(unlist(pb_cost[c("a_mean", "b_mean", "estimate", "lower", "upper")]), 3)
 # number of gains, ties and regressions. With only 4 dev tasks the interval
 # is wide: 4 tasks cannot show much. Real comparisons need more tasks
 # (Exercise 5), and a regression on any task deserves a look at its trajectory.
+# Recorded run (November 22, 2026): pass: difference = -0.1, 95% CI [-0.3,
+# 0], 0 gains, 3 same, 1 regressions; cost: difference = 8.126e-06, 95% CI
+# [-9.506e-06, 2.844e-05], 2 gains, 0 same, 2 regressions.
 
 
 # ==============================================================================
@@ -433,6 +458,8 @@ if (!nzchar(Sys.getenv("TAVILY_API_KEY"))) {
 # A hit on "researchAgentR" or "research_tasks" is a red flag: open that
 # trajectory with view_episode() and read what the agent did with it.
 # Zero rows means no hit.
+# Recorded run (November 22, 2026): 13 rows from 4 episodes, every pattern an
+# expected DOI, none a key pattern; both doi_entropy trials hit max_cost.
 
 
 # ==============================================================================
@@ -443,6 +470,9 @@ plot_frontier(res_v1, res_v2)
 # EXPECTED OUTPUT: a scatter plot of success rate against cost per attempted
 # task, one point per version, with the Pareto front (versions no other
 # version beats on both axes) in blue and dominated versions in vermillion.
+# Recorded run (November 22, 2026): finder v1 was better on both axes, and
+# the console showed the ggplot2 message "`geom_line()`: Each group consists
+# of only one observation."
 
 # Choose the final version on the DEV results, write the choice down, and
 # only then run the held-out tasks, ONCE. Tuning after seeing held-out
@@ -455,6 +485,9 @@ res_heldout <- keep("eval09_heldout_final", fresh_trials(
 eval_summary(res_heldout, k = c(1, 3, 5))
 # EXPECTED OUTPUT: one row for the held-out run, with the same columns as STEP 5.
 # Graders compare HASHES of the agent's answer with the hashed key.
+# Recorded run (November 22, 2026): success_rate, pass@k and pass^k all
+# 0.6666667 over 15 trials of 3 tasks; cost_per_success 0.00036372; 0 errors,
+# 0 timeouts, 0 ungraded.
 
 saveRDS(list(v1 = res_v1, v2 = res_v2, judge = res_judge, heldout = res_heldout,
              rubric = RUBRIC, date = Sys.Date()),

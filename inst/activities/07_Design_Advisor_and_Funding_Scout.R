@@ -88,9 +88,11 @@ power_code <- if (has_pwr) {
 r_power <- run_r_code(power_code)
 r_power
 # EXPECTED OUTPUT: a power calculation for a two-sample t-test with n (the
-# sample size PER GROUP), d or delta, sig.level and power.
+# sample size PER GROUP), d or delta, sig.level and power: n = 99.08032 with
+# pwr, n = 99.08057 with power.t.test().
 
-# Verify: the same code in your own session gives the same n (deterministic).
+# Verify: the same calculation in your own session gives the same n up to
+# rounding (pwr and power.t.test() differ in the fourth decimal).
 power.t.test(delta = 0.4, sd = 1, power = 0.80, sig.level = 0.05)$n
 
 
@@ -120,7 +122,8 @@ Sys.unsetenv("DEMO_FAKE_API_KEY")
 # (d) No network (soft): proxy variables point to an address where nothing
 # listens, so ordinary web requests fail.
 run_r_code("readLines('https://cran.r-project.org')")$error
-# EXPECTED OUTPUT: an error message about a failed connection or proxy.
+# EXPECTED OUTPUT: an error message about a failed connection or proxy, for
+# example "cannot open the connection to 'https://cran.r-project.org'".
 
 # (e) THE LIMIT: this is NOT a security boundary. The child runs as YOUR user
 # account, so it can still see (and read) your files, including ~/.Renviron.
@@ -241,6 +244,9 @@ ep1$answer$clarifying_questions
 # EXPECTED OUTPUT: stop reason final_answer, status "needs_clarification",
 # and two to four questions (for example about the outcome measure, the
 # comparison condition, the expected effect size or the sample available).
+# Recorded run (November 22, 2026): final_answer after 4 model calls and 4
+# tool calls, 3 of them "(invalid tool call)" errors before the model called
+# final_answer correctly; 4 questions; cost $0.00153.
 
 # --- Run 2: the researcher answers --------------------------------------------
 # Answers come from your notes, not from the model. Edit them for your study.
@@ -262,12 +268,17 @@ ep2 <- run(advisor, task2, budget = budget(max_steps = 8, max_cost = 0.05))
 ep2
 # EXPECTED OUTPUT: stop reason final_answer after one or more run_r calls;
 # status "complete".
+# Recorded run (November 22, 2026): final_answer after 3 model calls and 3
+# tool calls (run_r, one invalid tool call, final_answer); cost $0.00224.
 
 advice <- ep2$answer
 cat("Recommended design:", advice$recommended_design, "\n")
 str(advice$power_analysis)
 # EXPECTED OUTPUT: the R code the agent ran, the sample size it copied from
 # the output, and its assumptions (d = 0.30, alpha = .05, power = .80).
+# Recorded run (November 22, 2026): "two-arm randomized experiment"; the code
+# was a pwr.t.test() call with d = 0.30, and the result field said 176
+# participants per group (352 in total).
 
 # Structured fields become data frames in one line each:
 designs <- do.call(rbind, lapply(advice$candidate_designs, as.data.frame))
@@ -276,15 +287,24 @@ designs
 threats
 # EXPECTED OUTPUT: one row per design (name, description, main_tradeoff) and
 # one row per threat (threat, type, mitigation).
+# Recorded run (November 22, 2026): 3 designs (two-arm randomized, crossover,
+# three-arm randomized) and 4 threats, one of each type.
 
 str(advice$preregistration, nchar.max = 120)
 # EXPECTED OUTPUT: hypotheses (a list of sentences) and six text fields.
+# Recorded run (November 22, 2026): List of 7; hypotheses held one entry
+# ("H1: ...") and str() showed it as chr, like the six text fields.
 
 # --- Verify the computation yourself --------------------------------------------
 # The trajectory shows every run_r call and whether it failed:
 steps <- episode_steps(ep2)
 steps[steps$type == "tool", c("step", "name", "is_error", "detail")]
-# EXPECTED OUTPUT: one row per run_r call, with the start of each output.
+# EXPECTED OUTPUT: one row per tool step: every run_r call with the start of
+# its output, any "(invalid tool call)" step (is_error TRUE) and the
+# final_answer step.
+# Recorded run (November 22, 2026): 3 rows: run_r (output with n = 175.3847),
+# one invalid tool call (the model called a tool named 'answer', which is not
+# one of its tools) and final_answer.
 
 # Rerun the agent's own code in a fresh sandbox and compare with its claim:
 check <- run_r_code(advice$power_analysis$r_code, packages = if (has_pwr) "pwr")
@@ -292,6 +312,8 @@ check
 cat("Agent's claim:", advice$power_analysis$result, "\n")
 # EXPECTED OUTPUT: the same n that the agent reported. If they differ, the
 # agent misread its own output: that is an error to report, not to fix by hand.
+# Recorded run (November 22, 2026): the rerun printed n = 175.3847; the
+# agent's claim was 176 participants per group, the same n rounded up.
 
 # Open the full trajectory (every message, tool call, token and cost):
 # view_episode(ep2)
@@ -314,18 +336,24 @@ nih[, c("project_num", "fiscal_year", "agency", "award_amount", "title")]
 # EXPECTED OUTPUT: the total number of matching projects, then up to 10 rows
 # with project number, fiscal year, administering institute (for example
 # NIA or NIMH), award amount in US dollars and title.
+# Recorded run (November 22, 2026): total 58; 10 rows, all of fiscal year
+# 2025, from NIMH, NIA, NIDCD and NIAAA.
 
 nsf <- search_nsf_awards("psychometrics machine learning", n = 10, date_start = "2024-01-01")
 attr(nsf, "total")
 nsf[, c("id", "start_date", "amount", "title")]
 # EXPECTED OUTPUT: up to 10 NSF awards that started on or after 2024-01-01,
 # with award id, start date, funds obligated and title.
+# Recorded run (November 22, 2026): total 10000; the 10 rows had start dates
+# from 03/01/2027 to 04/01/2027.
 
 grants <- search_grants_gov("mental health measurement", n = 10)
 attr(grants, "total")
 grants[, c("id", "number", "agency_code", "close_date", "title")]
 # EXPECTED OUTPUT: currently posted opportunities with Grants.gov id, funding
 # opportunity number, agency code, closing date (NA when not given) and title.
+# Recorded run (November 22, 2026): total 397; 10 rows, 8 of them with agency
+# code HHS-NIH11; every row had a closing date.
 
 # The full synopsis of the first one (eligibility, award size, description):
 if (nrow(grants)) {
@@ -335,6 +363,8 @@ if (nrow(grants)) {
 }
 # EXPECTED OUTPUT: a one-row data frame and the first 800 characters of the
 # synopsis in plain text.
+# Recorded run (November 22, 2026): PAR-28-091, National Institutes of
+# Health, response_date NA, award_floor NA, award_ceiling 5e+05.
 
 
 # ==============================================================================
@@ -398,11 +428,16 @@ draft_aim <- paste(
   "Draft aim: develop and validate a short adaptive measure of loneliness for older adults,",
   "using AI-assisted item generation and ecological momentary assessment.")
 
+# final_call = TRUE: a scout that is still searching after 10 model calls gets
+# one more call to hand in what it has (stop reason "max_steps_final_answer");
+# without it, such a run ends with no answer and nothing to verify below.
 ep_fund <- run(scout, paste(profile, draft_aim, sep = "\n\n"),
-               budget = budget(max_steps = 10, max_cost = 0.05, max_seconds = 300))
+               budget = budget(max_steps = 10, max_cost = 0.05, max_seconds = 300,
+                               final_call = TRUE))
 ep_fund
 # EXPECTED OUTPUT: several tool calls (nih_reporter, nsf_awards, grants_gov),
-# then stop reason final_answer.
+# then stop reason final_answer, or max_steps_final_answer when the 10 model
+# calls of the budget were used up and the scout handed in what it had.
 
 opps <- do.call(rbind, lapply(ep_fund$answer$open_opportunities, as.data.frame))
 projects <- do.call(rbind, lapply(ep_fund$answer$similar_funded_projects, as.data.frame))
@@ -410,7 +445,8 @@ opps
 projects
 unlist(ep_fund$answer$searches)
 # EXPECTED OUTPUT: up to 5 opportunities and up to 5 funded projects, each
-# with a one-sentence justification, and the list of searches the agent ran.
+# with a one-sentence justification, and the list of searches the agent ran
+# (NULL three times if the episode ended without an answer).
 
 # --- Verify in code: did every id come from a tool result? ---------------------
 # The model only saw what the tools returned. An id that does not appear in

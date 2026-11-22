@@ -195,6 +195,8 @@ if (length(csv_files)) {
                           "summary(d$value)\nnrow(d)"), dir = work_dir))
 }
 # EXPECTED OUTPUT: summary statistics of the value column and the number of rows.
+# Recorded run (November 22, 2026): "<r_code_result> ok | 0.33 s", Min.
+# 321815121, Max. 340003797, then [1] 10 and the files in the working folder.
 
 
 # ==============================================================================
@@ -234,6 +236,10 @@ ep_data
 episode_steps(ep_data)[, c("step", "type", "name", "is_error", "detail")]
 # EXPECTED OUTPUT: a world_bank call, one or more run_r calls (an error is
 # fine: the agent reads it and fixes its code), then a final answer.
+# Recorded run (November 22, 2026): stop reason final_answer, 3 model calls,
+# 5 tool calls (2 errors), cost $0.00097, 6.4 s; both errors were rows named
+# "(invalid tool call)", for example "Failed to parse tool call arguments as
+# JSON" (not run_r errors), and the next model call went through.
 
 # No answer usually means the data never arrived: when every world_bank step
 # is an error (stop reason max_tool_errors), the World Bank API is not
@@ -249,6 +255,9 @@ do.call(rbind, lapply(ans$numbers, as.data.frame))
 cat(ans$caveats, "\n")
 # EXPECTED OUTPUT: the answer, one row per number (quantity, value, unit)
 # and the caveats (for example missing years and the data's last update).
+# Recorded run (November 22, 2026): changes of 0.742 years (Brazil), 0.638
+# (Mexico) and -0.304878 (United States), "The largest increase was in
+# Brazil."; 4 rows of numbers; the caveats reported 0 missing values.
 
 # --- Verify: rerun the agent's code and look for each number in the output ----
 check <- run_r_code(ans$r_code, dir = work_dir)
@@ -269,6 +278,9 @@ le_wide$change <- le_wide$value.2023 - le_wide$value.2015
 le_wide
 # EXPECTED OUTPUT: one row per country with the 2015 and 2023 values and the
 # change; NA where a year is missing (then the agent's answer must say so).
+# Recorded run (November 22, 2026): BRA 75.10600 and 75.84800 (change
+# 0.742000), MEX 74.43100 and 75.06900 (0.638000), USA 78.69024 and 78.38537
+# (-0.304878), no NA: the same changes as in the agent's answer above.
 
 
 # ==============================================================================
@@ -286,7 +298,7 @@ write.csv(extraversion[, c("doc_id", "subtopic", "text")],
 # The sandbox alone, offline:
 run_r_code("d <- read.csv('extraversion.csv', fileEncoding = 'UTF-8')\ntable(d$subtopic)", dir = work_dir)
 # EXPECTED OUTPUT: the number of texts per subtopic (Assertive, Energetic,
-# Friendly, Positive).
+# Friendly, Positive): 30 each.
 
 local_agent <- agent(
   name = "local_data_agent",
@@ -303,13 +315,17 @@ ep_local
 cat(ep_local$answer, "\n")
 # EXPECTED OUTPUT: run_r calls that count texts and average word counts by
 # subtopic, and an answer naming the subtopic with the longest texts.
+# Recorded run (November 22, 2026): stop reason final_answer, 3 model calls,
+# 3 tool calls (1 error, an "(invalid tool call)" row), cost $0.00044, 2.1 s;
+# the answer named Friendly (25.16667 words on average).
 
 # Verify in your own session:
 table(extraversion$subtopic)
 words <- lengths(strsplit(trimws(extraversion$text), "\\s+"))
 sort(tapply(words, extraversion$subtopic, mean), decreasing = TRUE)
 # EXPECTED OUTPUT: 30 texts per subtopic, and the mean number of words per
-# subtopic, largest first. Compare with the agent's answer.
+# subtopic, largest first: Friendly 25.16667, Positive 19.90000, Energetic
+# 19.50000, Assertive 18.46667. Compare with the agent's answer.
 
 # PARTICIPANT DATA: never give a cloud-model agent a file with participant
 # data. Whatever the code prints (a head(), an error message that quotes a
@@ -356,6 +372,12 @@ sort(tapply(words, extraversion$subtopic, mean), decreasing = TRUE)
 # - "World Bank API returned no records: ...": an invalid country code or
 #   indicator; the message comes from the API. The agent sees it as an error
 #   observation and can correct the code.
+# - Every world_bank step is an error and the episode stops with
+#   "max_tool_errors": the World Bank API is not answering (it has slow
+#   periods). The agent did the right thing; run the step again later.
+# - A step named "(invalid tool call)": the provider rejected the model's
+#   call (arguments that were not valid JSON, or a tool that does not exist,
+#   such as "json"). The loop tells the model and goes on (Activity 02).
 # - Values are NA: the indicator is not yet available for recent years (data
 #   lag one or two years). They are kept as NA and counted, never filled in.
 # - keep() returns an old download: delete the kept file or use

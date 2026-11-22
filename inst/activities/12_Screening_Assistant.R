@@ -95,6 +95,8 @@ if (!file.exists(SCREENING_FILE)) {
 }
 # EXPECTED OUTPUT: the first time, a message if some works were not found;
 # data/screening.csv then exists and later runs read it directly.
+# Recorded run (November 22, 2026): "10 of 986 works were not found in
+# OpenAlex (rows of NA)."
 
 # --- The review question and the inclusion criteria (written BEFORE screening) ---
 # Each criterion is a STATEMENT that is true of a record to include: the same
@@ -138,6 +140,8 @@ cat(sprintf("%d records, %d includes (%.1f%%), %d without an abstract\n",
 # EXPECTED OUTPUT: one line with the number of records, of human includes (and
 # their percentage) and of records with no abstract (these can only be judged
 # from the title: count them, do not drop them).
+# Recorded run (November 22, 2026): "976 records, 19 includes (1.9%), 275
+# without an abstract".
 
 # Includes are rare in most reviews. To estimate recall with a small budget,
 # the sample over-represents them (up to one third of the sample). This makes
@@ -184,6 +188,9 @@ abline(0, 1 / nrow(sample_df), lty = 2)     # random order, on average
 # against about 95% of the sample in random order; and a step curve above
 # the dashed diagonal when the ranking helps. A ranking is not a decision:
 # every record is still screened below.
+# Recorded run (November 22, 2026): the top record (index 60) scored 0.8910;
+# of 60 records, 28 were read for 95% recall, against 57 expected in random
+# order.
 
 
 # ==============================================================================
@@ -204,6 +211,9 @@ table(path = sample_df$path, human_label = sample_df$label)
 # routed "clearly_off_topic" is a router error: read its title. (Those
 # records are still screened by screener A in STEP 4, so the error is not
 # final, but the router must not be trusted to exclude on its own.)
+# Recorded run (November 22, 2026): clearly_off_topic: 37 human excludes and
+# 3 human includes (router errors); needs_screening: 4 excludes and 16
+# includes.
 
 
 # ==============================================================================
@@ -250,6 +260,8 @@ table(decision = screen_a$decision, useNA = "ifany")
 sum(is.na(screen_a$decision))           # no valid answer: counted, never guessed
 # EXPECTED OUTPUT: counts of include and exclude (and NA for records where
 # the agent gave no valid structured answer), then the number of NAs.
+# Recorded run (November 22, 2026): 39 exclude, 21 include, then 0; all 60
+# episodes stopped with final_answer.
 
 
 # ==============================================================================
@@ -282,6 +294,8 @@ if (SCREENER_B == "jev") {
 table(decision_B = screen_b$decision, useNA = "ifany")
 # EXPECTED OUTPUT (Jev): the first rows of the records x criteria probability
 # matrix, then counts of include and exclude. (Second model: the counts only.)
+# Recorded run (November 22, 2026): with Jev, the first row was 0.89
+# (population), 0.99 (design) and 0.76 (topic); 10 exclude and 10 include.
 
 
 # ==============================================================================
@@ -294,6 +308,9 @@ inter
 # EXPECTED OUTPUT: <judge_calibration> with the number of pairs, percent
 # agreement, Cohen's kappa between screener A and screener B, the 2 x 2
 # table and the number of disagreements.
+# Recorded run (November 22, 2026): "<judge_calibration> 20 pairs | agreement
+# 75.0% | Cohen's kappa 0.500"; in the table, "judge" is screener A and
+# "human" is screener B; 5 disagreements, all A include and B exclude.
 
 disagree <- !is.na(pair$a) & !is.na(pair$b) & pair$a != pair$b
 sum(disagree)
@@ -335,6 +352,8 @@ adjudicated <- data.frame(
 adjudicated
 # EXPECTED OUTPUT: one row per disagreement with the adjudicator's decision
 # and whether it was confident (NA when it gave no valid answer).
+# Recorded run (November 22, 2026): 5 rows: 4 include (1 of them confident)
+# and 1 exclude (confident).
 
 
 # ==============================================================================
@@ -363,6 +382,9 @@ table(to_human = final$to_human)
 table(final$why[final$to_human])
 # EXPECTED OUTPUT: how many records go to a person, and why (a record can have
 # several reasons). Everything else is decided automatically.
+# Recorded run (November 22, 2026): 16 of 60 records went to a person: 7 for
+# "uncertain probability", 6 for "router vs screener" and 3 for "screeners
+# disagreed; uncertain probability".
 
 
 # ==============================================================================
@@ -392,6 +414,9 @@ sample_df[truth & !pipeline, c("id", "title")]
 # records sent to a person and the number of missed includes; then the titles
 # of the missed includes. With the course labels (final full-text decisions),
 # precision and kappa are understated; recall is the number to report.
+# Recorded run (November 22, 2026): 44 pairs, agreement 95.5%, kappa 0.831;
+# recall 0.8947368, precision 1, sent_to_human 0.2666667 and 2 missed
+# includes.
 
 
 # ==============================================================================
@@ -416,6 +441,9 @@ if (HAS_JEV) {
 }
 # EXPECTED OUTPUT (with a TypeSafe key): the steps of one episode, with the
 # Jev tool calls and their small costs next to the model calls.
+# Recorded run (November 22, 2026): 7 steps: 4 model calls (0.000312525 to
+# 0.000365700 each) and 3 tool calls, check_population, check_design and
+# check_topic (0.000050232 to 0.000052794 each); stopped with final_answer.
 
 # The cost of the whole pipeline (list price; free tiers bill nothing)
 all_eps <- c(attr(screen_a, "episodes"), adj_eps,
@@ -427,6 +455,9 @@ costs <- c(router = sum(routed$cost, na.rm = TRUE),
 round(c(costs, total = sum(costs), per_record = sum(costs) / nrow(sample_df)), 5)
 # EXPECTED OUTPUT: the cost of each stage, the total and the cost per record
 # screened, in US dollars at list price.
+# Recorded run (November 22, 2026): router 0.00528, screener_a 0.00873,
+# screener_b 0.00156 (Jev), adjudicator 0.00112, total 0.01669, per_record
+# 0.00028.
 
 saveRDS(list(final = final, screener_a = screen_a, screener_b = screen_b,
              adjudicated = adjudicated, costs = costs, criteria = INCLUSION_CRITERIA,

@@ -93,8 +93,8 @@ count_tokens("Exploratory graph analysis estimates the number of dimensions.")
 
 data(extraversion)
 count_tokens(extraversion)    # the whole data frame as JSON
-# EXPECTED OUTPUT: two integers; the data frame is several thousand tokens,
-# about the size of one generous search result.
+# EXPECTED OUTPUT: two integers, 16 and 7918; the data frame is several
+# thousand tokens, about the size of one generous search result.
 
 # A TOY CONVERSATION (no model involved): a system message, a task, and six
 # tool turns. Each "tool result" is 10 rows of the shipped extraversion
@@ -228,7 +228,7 @@ colSums(offline_sent[, -1])
 # task still succeeds: Steps 3 and 4 check.
 
 # ctx_compact() needs a model to write the summary, so it runs in Step 3.
-ctx_compact(trigger_tokens = 4000, keep_last = 2)
+ctx_compact(trigger_tokens = 2500, keep_last = 2)
 
 # EXPLAINER: "Lost in the Middle" (Liu et al., 2024, Transactions of the
 # Association for Computational Linguistics, https://doi.org/10.1162/tacl_a_00638).
@@ -268,25 +268,46 @@ scout_instructions <- paste(
   "check that title, journal and year match, and finish with one line per article:",
   "the title and its DOI. Never guess a DOI; write 'not found' instead.")
 
-make_scout <- function(context, extra_tools = list()) {
-  agent("scout", scout_instructions, model = SCOUT_MODEL,
-        tools = c(list(tool_openalex(n = 10)), extra_tools), context = context)
+# One search tool for every strategy, with a FIXED number of results. With
+# tool_openalex() the model may ask for fewer results than n, and the scouts
+# would then differ in how much they read, not only in how they manage it.
+# (filter_output() is explained in Step 5.)
+search_tool <- define_tool(
+  function(query) {
+    hits <- search_openalex(query, n = 8)
+    filter_output(hits, fields = c("title", "year", "source", "doi", "abstract"),
+                  max_items = 8, max_chars_per_field = 400, as_text = TRUE)
+  },
+  "Search OpenAlex for scholarly works. Returns title, year, source, DOI and the start of the abstract of 8 works.",
+  args = list(query = arg_string("Title words, authors or topic")),
+  name = "search_openalex", untrusted = TRUE)
+
+make_scout <- function(context, extra_tools = list(), extra_instructions = NULL) {
+  agent("scout", paste(c(scout_instructions, extra_instructions), collapse = " "),
+        model = SCOUT_MODEL, tools = c(list(search_tool), extra_tools), context = context)
 }
 
 notes_file <- file.path("results", "scout_notes.md")
 notes_ctx <- ctx_notes(notes_file, keep_last = 2)
 
+# The task needs three searches and then an answer that uses all three
+# results. keep_last = 2 is deliberately too short for that: at the last call
+# the first result has left the window. The compact and notes scouts drop the
+# same turns but keep what matters, in a summary or in notes.
 scouts <- list(
   full    = make_scout(ctx_full()),
   window  = make_scout(ctx_window(keep_last = 2)),
-  compact = make_scout(ctx_compact(trigger_tokens = 4000, keep_last = 2)),
-  notes   = make_scout(notes_ctx, extra_tools = notes_ctx$tools))   # notes need their tools
+  compact = make_scout(ctx_compact(trigger_tokens = 2500, keep_last = 2)),
+  notes   = make_scout(notes_ctx, extra_tools = notes_ctx$tools,   # notes need their tools
+                       extra_instructions = paste(
+                         "After each search, save the title and DOI you found with note_write",
+                         "before the next search: older results will no longer be visible.")))
 scouts$notes
 # EXPECTED OUTPUT: <agent> scout | groq:openai/gpt-oss-20b, tools
 # search_openalex, note_write, note_read, context "notes".
 
 # Budgets are set BEFORE comparing strategies, and are the same for all.
-lit_budget <- budget(max_steps = 12, max_tokens = 50000, max_cost = 0.05)
+lit_budget <- budget(max_steps = 10, max_tokens = 50000, max_cost = 0.05)
 
 # Independent runs. The full, window and compact scouts send IDENTICAL first
 # requests (same instructions, task and tool), so with the response cache on,
@@ -306,6 +327,9 @@ check_network(episodes)
 # EXPECTED OUTPUT: each run prints its steps (model calls with tokens and
 # cost, OpenAlex calls). On the free tier, the "full" run may pause on a 429
 # (rate limit) and retry automatically. Later runs load from keep().
+# A scout that needs 3 searches finishes in about 4 model calls (7 with
+# notes). The window scout often searches again for what it has forgotten
+# and stops with max_steps: more tokens, no answer.
 
 episodes$full$answer
 # EXPECTED OUTPUT: three lines, each a title and a DOI (or "not found").
@@ -349,7 +373,8 @@ ggplot(reports, aes(x = call, y = context_tokens, colour = strategy)) +
   theme_minimal(base_size = 12) +
   theme(legend.position = "bottom")
 # EXPECTED OUTPUT: the "full" line climbs at every call; "window" and "notes"
-# flatten; "compact" climbs until the trigger, then drops after a summary.
+# stay low (a window that forgot a result may go on for many calls);
+# "compact" climbs until the trigger (2,500 tokens), then drops after a summary.
 
 # The cost of the summaries written by ctx_compact():
 attr(context_report(episodes$compact), "context_steps")
@@ -359,7 +384,7 @@ attr(context_report(episodes$compact), "context_steps")
 # What the notes agent wrote down (read from the episode, so it works offline):
 note_steps <- episode_steps(episodes$notes)
 note_steps[note_steps$name %in% c("note_write", "note_read"), c("step", "name", "detail")]
-# EXPECTED OUTPUT: note_write calls with sources and DOIs, if the model used
+# EXPECTED OUTPUT: note_write calls with titles and DOIs, if the model used
 # its notes. A notes agent that never writes notes behaves like a window.
 
 
@@ -383,7 +408,7 @@ trimmed_text <- filter_output(extraversion, fields = c("doc_id", "subtopic", "te
 cat(trimmed_text)
 c(full = count_tokens(extraversion), trimmed = count_tokens(trimmed_text))
 # EXPECTED OUTPUT: the text the model would read, ending with the note in
-# brackets. Computed offline in this environment: 7,918 versus 94 tokens.
+# brackets. In the live run of November 22, 2026: 7,918 versus 93 tokens.
 
 # Logs and error messages: the first and last lines are where the information is
 fit_log <- paste(c("Fitting model", paste("iteration", 1:300),
@@ -465,6 +490,8 @@ ep_offload <- keep("act05_offload",
 episode_steps(ep_offload)[, c("step", "type", "name", "context_tokens", "detail")]
 # EXPECTED OUTPUT: a search_and_store call, then one or more recall calls with
 # a pattern; context_tokens stay small although 50 records were retrieved.
+# Recorded run (November 22, 2026): 5 steps (search_and_store, then recall
+# with pattern "2020"); context_tokens 140, 707 and 2776 at the 3 model calls.
 
 
 # ==============================================================================
@@ -489,6 +516,8 @@ best <- keep("act05_select_relevant",
 best
 # EXPECTED OUTPUT: 2 rows (index, score, text), best first; the Results
 # paragraph with the t test should be among them.
+# Recorded run (November 22, 2026): index 6 (the Results paragraph, score
+# 0.7082), then index 2 (score 0.7005).
 
 # What select_relevant() computes, offline, with the shipped MiniLM embeddings:
 # cosine similarity between a query vector and every passage, then the top k.
@@ -520,6 +549,8 @@ attr(short, "cost")
 # facts (type "doi", "number" or "quote", and the value). With 60 tokens for
 # a 347-token text, some numbers (years, page ranges) will be lost. Ask: were
 # the LOST facts ones the task needed?
+# Recorded run (November 22, 2026): 3 lost facts, all of type "number" (11,
+# 31, 40); source_tokens 347, summary_tokens 139; cost 9.54e-05.
 
 
 # ==============================================================================
@@ -553,6 +584,8 @@ check_network(episodes)
 episode_steps(episodes$subagent)[, c("step", "type", "name", "context_tokens", "cost")]
 # EXPECTED OUTPUT: model steps of the lead and three doi_finder tool steps;
 # each tool step's cost is the whole sub-episode's cost.
+# Recorded run (November 22, 2026): 7 steps (4 model, 3 doi_finder); the
+# doi_finder costs were 0.000156075, 0.000166425 and 0.000161475.
 
 # The sub-episodes themselves (saved as JSON):
 episodes_df(file.path("results", "sub_episodes"))[, c("agent", "stop_reason", "model_calls",
@@ -624,9 +657,11 @@ ep_skill$answer
 # ==============================================================================
 
 # 1. ctx_window(keep_last = 1): does the scout still report all three DOIs?
-# 2. ctx_compact(trigger_tokens = 2000): how many "context" steps, at what cost?
-# 3. tool_openalex(n = 3) instead of n = 10: tokens versus verified success.
-# 4. subagent(doi_finder, summary_words = 20): what does the lead lose?
+# 2. ctx_compact(trigger_tokens = 1200): how many "context" steps, at what cost?
+# 3. search_openalex(query, n = 3) in search_tool instead of n = 8: tokens
+#    versus verified success.
+# 4. ctx_window(keep_last = 3): does the window scout finish now?
+# 5. subagent(doi_finder, summary_words = 20): what does the lead lose?
 
 
 # ==============================================================================

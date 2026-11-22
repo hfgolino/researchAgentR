@@ -77,3 +77,41 @@ test_that("live tokens and the largest prompt are tracked per model", {
   expect_equal(sp$max_prompt[["groq:openai/gpt-oss-20b"]], 5000)
   expect_equal(sp$live_tokens[["ollama:qwen3:4b"]], 115)
 })
+
+test_that("a time limit reaches the request: timeout and retries end with the deadline", {
+  env <- researchAgentR:::.pkg_env
+  old <- env$deadline; on.exit(env$deadline <- old)
+  env$deadline <- NULL
+  expect_equal(researchAgentR:::.seconds_left(), Inf)
+  req <- researchAgentR:::.request("http://localhost:9/none", body = list(q = 1), auth = "none", timeout = 120)
+  expect_identical(researchAgentR:::.within_deadline(req), req)          # no deadline: no change
+
+  earlier <- researchAgentR:::.set_deadline(30)
+  expect_null(earlier)
+  expect_gt(researchAgentR:::.seconds_left(), 28); expect_lte(researchAgentR:::.seconds_left(), 30)
+  researchAgentR:::.set_deadline(300)                                     # a looser limit does not replace a tighter one
+  expect_lte(researchAgentR:::.seconds_left(), 30)
+  researchAgentR:::.set_deadline(Inf); expect_lte(researchAgentR:::.seconds_left(), 30)
+  limited <- researchAgentR:::.within_deadline(req)
+  expect_lte(limited$options$timeout_ms, 30000)                           # was 120 seconds
+
+  researchAgentR:::.set_deadline(5)
+  short <- researchAgentR:::.request("http://localhost:9/none", auth = "none", timeout = 2)
+  expect_lte(researchAgentR:::.within_deadline(short)$options$timeout_ms, 2000)   # the request's own, shorter timeout stays
+
+  env$deadline <- Sys.time() - 1                                          # the limit has passed
+  expect_error(researchAgentR:::.perform(req, cache = FALSE), "time limit was reached")
+})
+
+test_that("a tool call sets the deadline for its requests and restores the earlier one", {
+  env <- researchAgentR:::.pkg_env
+  old <- env$deadline; on.exit(env$deadline <- old)
+  env$deadline <- NULL
+  left_inside <- NULL
+  slow <- define_tool(function(x) { left_inside <<- researchAgentR:::.seconds_left(); x },
+                      "Echo.", args = list(x = arg_string("Text")), name = "echo", timeout = 20)
+  out <- call_tool("echo", list(slow), list(x = "a"))
+  expect_false(out$is_error)
+  expect_lte(left_inside, 20); expect_gt(left_inside, 18)
+  expect_null(env$deadline)                                               # restored after the call
+})

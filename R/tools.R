@@ -280,6 +280,10 @@ call_tool <- function(tool_call, tools, arguments = NULL) {
   # again outside any handler and stop the whole R process. The outer
   # tryCatch() catches such a second error, should one slip through.
   clear <- function() if (limited) setTimeLimit(elapsed = Inf)
+  # The same limit goes to any web request the tool makes (R's time limit
+  # cannot interrupt a request that waits on a server).
+  earlier <- .set_deadline(tool$timeout)
+  on.exit(.pkg_env$deadline <- earlier, add = TRUE)
   value <- tryCatch(tryCatch({
     if (limited) setTimeLimit(elapsed = tool$timeout, transient = TRUE)
     out <- do.call(tool$fn, checked$arguments)
@@ -288,7 +292,10 @@ call_tool <- function(tool_call, tools, arguments = NULL) {
   }, error = function(e) { clear(); e }), error = function(e) { clear(); e })
   if (inherits(value, "error")) {
     msg <- conditionMessage(value)
-    if (grepl("elapsed time limit", msg)) msg <- paste0("the tool took longer than ", tool$timeout, " seconds")
+    if (grepl("elapsed time limit|Timeout was reached|time limit was reached", msg) && limited &&
+        as.numeric(difftime(Sys.time(), t0, units = "secs")) >= tool$timeout - 1) {
+      msg <- paste0("the tool took longer than ", tool$timeout, " seconds")
+    }
     return(result(paste0("Error while running ", tool$name, ": ", msg), TRUE))
   }
   text <- .as_text(value)

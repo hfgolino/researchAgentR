@@ -193,7 +193,8 @@ attr(E_con, "model")
 attr(E_con, "usage")
 # EXPECTED OUTPUT: 10 rows (one per construct, named) and 768 columns (the
 # dimension of nomic-embed-text); the model string; usage with tokens,
-# cost 0 (local), requests and cached_requests.
+# cost 0 (local), requests and cached_requests. Recorded run (November 22,
+# 2026): 216 tokens, 1 request, 0 cached requests.
 
 # A small semantic search: embed the query with the SAME model, then sort.
 search_constructs <- function(query, E = E_con, model = EMBED_LOCAL, k = 3) {
@@ -209,6 +210,9 @@ keep("act15_search_lonely", search_constructs("feeling disconnected from other p
 # conscientiousness first for the first query, and loneliness or social
 # isolation first for the second. If it does not, that is a finding about
 # the model on short texts, not a bug in the search.
+# Recorded run (November 22, 2026): grit (0.725), depression (0.594) and
+# self_control (0.572) for the first query; loneliness (0.663),
+# social_isolation (0.613) and depression (0.571) for the second.
 
 # Jingle-jangle check: which pairs of DIFFERENT construct names have the most
 # similar definitions? (A "jangle": two names for one construct.)
@@ -223,6 +227,9 @@ head(pair_table[order(-pair_table$similarity), ], 5)
 # definitions and the evidence, not proof that two constructs are the same:
 # loneliness (a feeling) and social isolation (a count of contacts) are
 # distinct constructs with different measures.
+# Recorded run (November 22, 2026): loneliness and social_isolation first
+# (0.836), then loneliness and depression (0.797) and conscientiousness and
+# work_engagement (0.796); grit and self_control was not among the five.
 
 
 # ==============================================================================
@@ -286,7 +293,9 @@ provider_table
 # cloud it is tokens times the list price (a tiny number for 10 short texts;
 # NA when the package has no list price for that model). seconds is the
 # wall-clock time of the first, live run (the first local call also loads
-# the model into memory).
+# the model into memory). Recorded run (November 22, 2026): voyage-4 had
+# 1024 dimensions and cost 8.22e-06, jina cost NA; seconds ran from 0.003
+# (nomic-embed-text, same texts as in Step 4) to 0.515 (all-minilm).
 
 # PRIVACY: which of these sent the ten definitions to another company?
 providers()[providers()$provider %in% c("ollama", "openai"), c("provider", "base_url", "local")]
@@ -346,7 +355,9 @@ if (all(c(EMBED_LOCAL, EMBED_SMALL) %in% names(by_model))) {
 # The Spearman correlation of the 45 pair similarities tells whether the two
 # models at least RANK the pairs alike. Compare rankings within a model;
 # never mix raw similarities across models, and re-embed everything (store
-# and queries) after changing the embedding model.
+# and queries) after changing the embedding model. Recorded run (November
+# 22, 2026): grit and self_control 0.762 (nomic) and 0.612 (all-minilm);
+# medians 0.701 and 0.339; rank agreement 0.575.
 
 
 # ==============================================================================
@@ -466,9 +477,15 @@ data.frame(intended = requests$intended,
 # EXPECTED OUTPUT: one row per request with the intended route, the
 # embedding router's route and its weight, and the LLM router's route (NA
 # if a call failed, counted in a message).
+# Recorded run (November 22, 2026): the embedding router sent request 3 to
+# design_advisor (weight 0.42) and matched the intended route elsewhere,
+# with weights from 0.28 to 0.93; the LLM router matched all 12.
 
 round(attr(routed_emb, "probabilities"), 2)[1:3, ]
 # EXPECTED OUTPUT: a 3 x 5 matrix of weights (rows sum to 1), one column per route.
+# Recorded run (November 22, 2026): 0.74 for literature_scout in row 1 and
+# 0.47 in row 2; in row 3, 0.42 for design_advisor and 0.13 for
+# literature_scout (the intended route).
 
 data.frame(router = c("embedding (local)", "llm (Groq)"),
            accuracy = c(mean(routed_emb$route == requests$intended, na.rm = TRUE),
@@ -481,6 +498,8 @@ data.frame(router = c("embedding (local)", "llm (Groq)"),
 # the number of unrouted requests, the cost (0 for the local embedding
 # router; the LLM router's cost is the sum of 12 small calls, also free on the
 # free tier but counted at list price), and the seconds of the live run.
+# Recorded run (November 22, 2026): accuracy 0.917 (embedding) and 1 (LLM),
+# 0 unrouted, cost 0 and 0.00068925 dollars, 0.166 and 3.798 seconds.
 # The LLM router also wrote a reason for each choice:
 routed_llm[, c("route", "reason")]
 
@@ -526,7 +545,9 @@ c(llm_calls_needed = sum(uncertain), llm_calls_saved = sum(!uncertain),
 # EXPECTED OUTPUT: how many requests the cascade sends to the LLM router, how
 # many calls it saves, its accuracy against the intended routes, and its cost
 # (only the LLM calls for uncertain requests). Compare with Step 8: the goal
-# is the LLM router's accuracy at a fraction of its calls.
+# is the LLM router's accuracy at a fraction of its calls. Recorded run
+# (November 22, 2026): 6 calls needed and 6 saved (printed as 6.000000000),
+# accuracy 1, cost 0.000354225.
 
 # Dispatch: the routed request goes to a specialist agent. Minimal agents
 # with one tool each (the full versions are in Activities 03, 06 and 07).
@@ -565,6 +586,10 @@ ep_dispatch
 # <episode> of the design advisor: its stop reason, model and tool calls,
 # tokens and cost. A correct answer comes from pwr::pwr.t.test() output in a
 # run_r step (episode_steps(ep_dispatch) shows the code and what it printed).
+# Recorded run (November 22, 2026): the message gave cosine similarity 0.585
+# (the raw similarity, not the weight that is compared with 0.6); stop
+# reason final_answer, 2 model calls, 1 tool call, 1,089 tokens, $0.00013;
+# run_r printed n = 99.08032 and the answer said about 99 per group.
 
 
 # ==============================================================================

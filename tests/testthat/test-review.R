@@ -78,6 +78,26 @@ test_that("near-duplicates are merged and ranked, quotes verified", {
   expect_true(all(c("id", "quote", "found", "merged") %in% names(empty)))
 })
 
+test_that("a finding from a check in code is never merged into a model's comment", {
+  docs <- data.frame(file = "f.md", section = "Results", paragraph = 1,
+                     text = "The difference was significant, t(63) = 2.31, p = .002, in both samples.")
+  rows <- rbind(
+    .suggestion("model", "f.md", "Results", "reporting", "high",
+                "The difference was significant, t(63) = 2.31, p = .002", "Report an effect size."),
+    .suggestion("check", "f.md", "Results", "reporting", "medium",
+                "t(63) = 2.31, p = .002", "The recomputed p-value is 0.0242, not .002."))
+  out <- .finalize_review(rows, docs)
+  expect_equal(nrow(out), 2)                       # the recomputed p-value survives
+  expect_equal(sort(out$source), c("check", "model"))
+  expect_equal(out$merged, c(0L, 0L))
+  # the other way round still merges: a model's comment on text a check already flagged
+  rows2 <- rbind(
+    .suggestion("check", "f.md", "Results", "reporting", "high", "t(63) = 2.31, p = .002", "Recomputed p = 0.0242."),
+    .suggestion("model", "f.md", "Results", "reporting", "low", "p = .002", "Check this p-value."))
+  out2 <- .finalize_review(rows2, docs)
+  expect_equal(nrow(out2), 1); expect_equal(out2$source, "check"); expect_equal(out2$merged, 1L)
+})
+
 test_that("figure and table labels are checked in R Markdown and LaTeX", {
   f <- tempfile(fileext = ".Rmd")
   writeLines(c("See Figure \\@ref(fig:used).", "", "```{r used, fig.cap = 'A'}", "plot(1)", "```",

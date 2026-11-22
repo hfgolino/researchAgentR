@@ -98,7 +98,7 @@ attr(checks, "notes")
 # (recomputed p = 0.0242).
 #
 # Read the rows: checks in code are proxies. The 19 low rows are style-rule
-# hits (em dashes and "we"/"our"), each with the exact sentence quoted; they
+# hits (em dashes and "we"/"our"), each with the exact words quoted; they
 # follow YOUR rules, so a rule you do not hold should be removed (Step 2).
 # Every row says how it was found, in the rationale column.
 # Selecting rows keeps the review view; selecting columns gives a plain data frame.
@@ -113,6 +113,9 @@ attr(checks_online, "notes")
 
 # EXPECTED OUTPUT: a note "N DOI(s) checked." and a high-severity row for
 # every DOI that was not found or is marked as retracted.
+# Recorded run (November 22, 2026): "4 DOI(s) checked." (verified = 3,
+# not_found = 1) and one high row: "The DOI 10.1037/met0009954 was not found.
+# Correct it."
 
 # A reported statistic can be recomputed in one line. review_checks() does
 # this for t, F, r, z and chi-square results; statcheck (Nuijten and Polanin,
@@ -222,6 +225,8 @@ as.data.frame(review)[review$source == "model", c("id", "severity", "category", 
 # counts list has checks, model_suggestions, quotes_dropped, merged and
 # failed_calls. The dropped rows are suggestions whose quote is NOT in the
 # manuscript: the verifier removed them, and they are kept for inspection.
+# Recorded run (November 22, 2026): 68 suggestions (22 from checks in code, 46
+# from the model), 6 of 57 model quotes dropped, 7 merged, cost $0.01221.
 
 recall_table(review, key)
 sum(recall_table(review, key)$found)
@@ -231,6 +236,9 @@ sum(recall_table(review, key)$found)
 # mismatch, or the overclaim), and which did it miss? A single run is one
 # trial; Activity 09 explains why several trials are needed before saying
 # "the reviewer finds X".
+# Recorded run (November 22, 2026): found was TRUE for all six (sum 6): the
+# sample-size mismatch through a model row (id 5) and the invalid DOI through
+# the online check in code (id 2).
 
 
 # ==============================================================================
@@ -310,8 +318,8 @@ sum(grepl("delve", read_text("review_work/manuscript_revised.md")))
 
 # EXPECTED OUTPUT (computed offline): the two quotes; then "2 of 2 accepted
 # suggestion(s) applied; original unchanged." and "2 applied, 0 skipped",
-# each change printed with "-" (before) and "+" (after) and its line (9 for
-# the overclaim in the abstract, 17 for "delve"); TRUE (the copy in
+# each change printed with "-" (before) and "+" (after) and its line (11 for
+# the overclaim in the abstract, 19 for "delve"); TRUE (the copy in
 # review_work is untouched); 1 and 0 lines with "delve".
 
 # 8b. The model's suggestions: read each one, then accept by id. Never accept
@@ -330,6 +338,9 @@ if (length(accept_ids)) {
 # accept_ids, a revision_result: "applied" rows, and skipped rows with a
 # reason: "no_revision", "not_found" (the quote is no longer in the text)
 # or "ambiguous" (the quote occurs more than once).
+# Recorded run (November 22, 2026): 27 rows had a proposed revision, and
+# some revisions add a citation or number that the quote does not have, for
+# example "(Doe et al., 2023)" (id 30) and "(see Smith & Jones, 2021)" (id 27).
 
 
 # ==============================================================================

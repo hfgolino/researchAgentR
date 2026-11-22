@@ -25,3 +25,15 @@ test_that("live: thinking can be switched off in Ollama", {
   expect_equal(nchar(r$reasoning), 0)
   expect_true(nzchar(r$content))
 })
+
+test_that("thinking that leaks into the answer is moved to the reasoning", {
+  f <- researchAgentR:::.split_thinking
+  out <- f("Okay, let me work this out.\nThe user wants one word.\n</think>\n\nOK")
+  expect_equal(out$content, "OK")
+  expect_match(out$reasoning, "let me work this out")
+  both <- f("<think>second thoughts</think>Answer.", reasoning = "first thoughts")
+  expect_equal(both$content, "Answer.")
+  expect_equal(both$reasoning, "first thoughts\nsecond thoughts")
+  plain <- f("A plain answer.", "kept")
+  expect_equal(plain, list(content = "A plain answer.", reasoning = "kept"))
+})

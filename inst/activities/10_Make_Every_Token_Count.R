@@ -129,8 +129,10 @@ data.frame(
   row.names = NULL)
 # EXPECTED OUTPUT (arithmetic on the registry prices of October 2026):
 # gpt-oss-120b 0.00105 without cache and 0.00075 with 4,000 cached tokens;
-# gpt-oss-20b half of that (0.000525 and 0.000375). Check the paid rows
-# against the pricing pages in the `source` column before relying on them.
+# gpt-oss-20b half of that (0.000525 and 0.000375). The two paid rows
+# (claude-haiku-5-5 and gpt-6-luna) both show 0.00075 and 0.00039. Check the
+# paid rows against the pricing pages in the `source` column before relying
+# on them.
 
 
 # ==============================================================================
@@ -168,6 +170,9 @@ eval_summary(base, k = c(1, 3))
 # groq:openai/gpt-oss-120b", "cheap + 1 retry: groq:openai/gpt-oss-20b") with
 # success_rate, pass@k, pass^k, cost_per_attempt, cost_per_success, p50 and
 # p95 seconds, errors, timeouts and ungraded trials.
+# Recorded run (November 22, 2026): success_rate 0.6666667 (cheap; pass^3
+# 0.50), 0.75 (strong) and 0.75 (cheap + 1 retry); cost_per_success
+# 0.0004760344, 0.0008143667 and 0.0003438917, in the same order.
 
 # How many such episodes fit in the free tier?
 tokens_per_episode <- tapply(base$tokens, base$solver, mean, na.rm = TRUE)
@@ -179,6 +184,9 @@ data.frame(solver = names(tokens_per_episode),
 # EXPECTED OUTPUT: mean billed tokens per episode for each baseline, and how
 # many episodes the daily and per-minute limits allow. This is the number
 # every technique below tries to raise without lowering success.
+# Recorded run (November 22, 2026): 4040 (cheap + 1 retry), 4081 (cheap) and
+# 4345 (strong) tokens per episode: 49, 49 and 46 episodes per day, and
+# 1.98, 1.96 and 1.84 per minute.
 
 
 # ==============================================================================
@@ -196,6 +204,9 @@ signif(unlist(pb[c("a_mean", "b_mean", "estimate", "lower", "upper")]), 3)
 # interval over tasks, and the difference in cost per trial. A cheaper model
 # that is "not worse" needs an interval that excludes meaningful losses, not
 # just a point estimate near zero.
+# Recorded run (November 22, 2026): success: difference = -0.08333, 95% CI
+# [-0.25, 0], 0 gains, 3 same, 1 regressions; cost: estimate -0.000293,
+# lower -0.000467, upper -0.000120.
 
 
 # ==============================================================================
@@ -208,7 +219,8 @@ data.frame(tool = vapply(ALL_TOOLS, `[[`, character(1), "name"),
            schema_tokens = vapply(ALL_TOOLS, function(t) count_tokens(tool_schema(t)), numeric(1)))
 sum(vapply(ALL_TOOLS, function(t) count_tokens(tool_schema(t)), numeric(1)))
 # EXPECTED OUTPUT: one row per tool with its approximate schema size, and the
-# total that every call pays before the task is even read.
+# total that every call pays before the task is even read: 8 tools, from 136
+# (find_open_access) to 341 (nih_reporter) tokens, 1817 in total.
 
 SMALL_MENU <- list(tool_crossref(n = 5), tool_nih_reporter(n = 5, fiscal_years = 2025))
 res_menu <- keep("opt10_small_menu", fresh_trials(
@@ -217,6 +229,9 @@ res_menu <- keep("opt10_small_menu", fresh_trials(
 eval_summary(list(cheap_runs, res_menu), k = 1)
 # EXPECTED OUTPUT: two rows; compare success_rate, cost_per_success and
 # p50_seconds. Fewer tools also means fewer wrong tool choices.
+# Recorded run (November 22, 2026): the cheap baseline (8 tools) had
+# success_rate 0.6666667, cost_per_success 0.0004760344 and p50_seconds
+# 1.305935; "cheap, 2 tools" had 0.75, 0.0002350417 and 1.120783.
 
 
 # ==============================================================================
@@ -246,6 +261,9 @@ eval_summary(list(res_menu, res_filtered), k = 1)
 # EXPECTED OUTPUT: two rows; the filtered variant should use fewer tokens per
 # trial (compare cost_per_attempt). Check that success did not drop: a
 # filter that removes the field the model needs saves tokens and loses tasks.
+# Recorded run (November 22, 2026): both rows had success_rate 0.75, and the
+# filtered variant was not cheaper: cost_per_attempt 0.0001794625, against
+# 0.0001762813 without the filter.
 
 
 # ==============================================================================
@@ -281,6 +299,9 @@ rbind(stable = cache_share(file.path(EP_DIR, "small_menu")),
 # tokens, tokens read from Groq's prompt cache, and their share. Whether and
 # how much is cached depends on the provider and the model; record what you
 # observe and the date.
+# Recorded run (November 22, 2026): stable: 12 episodes, 24562 tokens, 8704
+# read from the cache (share 0.354); unstable: 12 episodes, 29987 tokens, 0
+# read from the cache.
 
 
 # ==============================================================================
@@ -315,10 +336,15 @@ eval_summary(list(cheap_runs, strong_runs, res_cascade), k = c(1, 3))
 # EXPECTED OUTPUT: three rows. The cascade's cost includes EVERY attempt
 # (the failed cheap one too) and the verifier. A good cascade sits between
 # the two fixed models on cost while keeping success close to the strong one.
+# Recorded run (November 22, 2026): the cascade had success_rate 0.75 and
+# cost_per_success 0.0002488750, below both baselines (cheap 0.0004760344,
+# strong 0.0008143667), which carry 8 tools against the cascade's 2.
 
 table(res_cascade$model)      # which model gave the final answer?
 # EXPECTED OUTPUT: counts of trials answered by each model (escalations
 # appear under the strong model).
+# Recorded run (November 22, 2026): all 12 trials were answered by
+# groq:openai/gpt-oss-20b (no escalation to the strong model).
 
 
 # ==============================================================================
@@ -330,8 +356,10 @@ q <- "In one sentence, what does pass^k measure for an agent?"
 r1 <- chat(q, model = CHEAP)
 r2 <- chat(q, model = CHEAP)
 c(first_cached = r1$cached, second_cached = r2$cached, second_cost = r2$cost)
-# EXPECTED OUTPUT: the second call is cached (TRUE) and costs 0. (The first is
-# also TRUE when you re-run the script: it was saved on the first run.)
+# EXPECTED OUTPUT: first_cached 0, second_cached 1 and second_cost 0: the
+# second call is cached and costs 0 (c() prints TRUE and FALSE as 1 and 0).
+# (first_cached is also 1 when you re-run the script: it was saved on the
+# first run.)
 
 # Reuse is safe only while the answer cannot change. Funding data, retractions
 # and "latest" anything go stale: refresh kept results older than a week.
@@ -362,6 +390,8 @@ res_tight <- keep("opt10_tight_budget", fresh_trials(
 table(res_tight$stop_reason, res_tight$pass, useNA = "ifany")
 # EXPECTED OUTPUT: stop reasons by outcome. Trials stopped by max_steps or
 # max_tokens with pass = FALSE are the price of the tighter budget.
+# Recorded run (November 22, 2026): all 12 trials stopped with final_answer
+# (9 TRUE, 3 FALSE); none was stopped by the tighter budget.
 
 
 # ==============================================================================
@@ -396,6 +426,10 @@ plot_frontier(summary_all, log_cost = TRUE)
 # EXPECTED OUTPUT: a table with one row per variant, and the quality-cost
 # frontier (success rate against cost per attempted task, log scale) with the
 # Pareto front marked.
+# Recorded run (November 22, 2026): 8 rows; success_rate 0.75 for all but the
+# cheap baseline (0.6666667, pass^3 0.50); cost_per_success from 0.0002350417
+# ("cheap, 2 tools") to 0.0008143667 (strong baseline); ggplot2 also printed
+# "`geom_line()`: Each group consists of only one observation."
 
 # A leaderboard by Pareto LAYERS on three criteria: success (higher is
 # better), cost per success and median time (lower is better). Layer 1 holds
@@ -427,6 +461,10 @@ leaderboard
 # EXPECTED OUTPUT: the variants sorted by layer (NA last: unknown cost or
 # success), with a TRUE/FALSE column for the criteria set in STEP 1. Choose
 # among variants that meet the targets, and write down why.
+# Recorded run (November 22, 2026): layer 1 held three variants:
+# "cheap, 2 tools", "cheap, 2 tools, filtered" and the cascade; layer 3 held
+# the two fixed-model baselines (strong and cheap), and meets_target was
+# FALSE only for the cheap baseline.
 
 
 # ==============================================================================
@@ -458,6 +496,9 @@ eval_summary(res_runtime, k = c(1, 3))
 # EXPECTED OUTPUT: the ledger printout with one line per kind (offline and
 # runtime: rows, model cost, grading cost, tokens), a table of cost and tokens
 # by kind and note, and the held-out summary of the chosen configuration.
+# Recorded run (November 22, 2026): runtime 9 rows, model cost $0.00130,
+# 15,044 tokens; offline 96 rows, model cost $0.02644, 278,923 tokens;
+# held-out success_rate 0.6666667 and cost_per_success 0.0002161875.
 
 saveRDS(list(summary = summary_all, leaderboard = leaderboard,
              ledger = rbind(offline, runtime), date = Sys.Date()),

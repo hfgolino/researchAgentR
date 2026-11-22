@@ -153,9 +153,10 @@ nzchar(Sys.getenv("RESEARCHAGENTR_EMAIL"))
 # packages, which keys are stored (masked), the e-mail, and Ollama.
 verify_setup()
 
-# With test_apis = TRUE it also sends ONE tiny request to each service that
-# has a key: the model list of each model provider (uses no tokens) and a
-# single-record lookup at OpenAlex and Crossref (free).
+# With test_apis = TRUE it also tests each service that has a key: the model
+# list of each model provider and a one-line chat (a few dozen tokens: free on
+# Groq, a small fraction of a cent on a paid provider), and a single-record
+# lookup at OpenAlex and Crossref (free).
 verify_setup(test_apis = TRUE)
 
 # EXPECTED OUTPUT: a table with columns check, status, detail. Rows "key groq",

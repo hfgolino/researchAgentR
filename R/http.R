@@ -26,14 +26,52 @@
   req <- httr2::req_user_agent(req, paste0("researchAgentR/", utils::packageVersion("researchAgentR"),
                                            " (https://github.com/hfgolino/researchAgentR)"))
   req <- httr2::req_timeout(req, timeout)
-  req <- httr2::req_retry(
+  req <- .retry_policy(req)
+  if (!is.null(rpm)) req <- .throttle(req, rpm, realm %||% url)
+  httr2::req_error(req, body = .error_body)
+}
+
+# Retry 429 and 5xx responses with exponential backoff, for at most
+# `max_seconds` in total when a time limit is running (see .set_deadline()).
+.retry_policy <- function(req, max_seconds = NULL) {
+  httr2::req_retry(
     req,
     max_tries = .opt("max_tries", 4),
+    max_seconds = max_seconds,
     is_transient = .is_transient,
     backoff = function(i) min(60, 2^i + stats::runif(1))
   )
-  if (!is.null(rpm)) req <- .throttle(req, rpm, realm %||% url)
-  httr2::req_error(req, body = .error_body)
+}
+
+# ---- Time limits ---------------------------------------------------------------
+# R's own time limit (setTimeLimit) cannot interrupt a request that is waiting
+# for a server: a tool with a 60-second limit once waited 13 minutes on a
+# service that had stopped answering. So the limit of the running tool call
+# or episode is also given to the request: `.pkg_env$deadline` is the time by
+# which a live request must end. A limit can only tighten the one in force;
+# the caller restores the value returned here when it is done.
+.set_deadline <- function(seconds) {
+  old <- .pkg_env$deadline
+  if (is.numeric(seconds) && is.finite(seconds)) {
+    new <- Sys.time() + seconds
+    if (is.null(old) || new < old) .pkg_env$deadline <- new
+  }
+  old
+}
+
+.seconds_left <- function() {
+  if (is.null(.pkg_env$deadline)) return(Inf)
+  as.numeric(difftime(.pkg_env$deadline, Sys.time(), units = "secs"))
+}
+
+# The request, limited to the time that is left (no change without a deadline).
+.within_deadline <- function(req) {
+  left <- .seconds_left()
+  if (!is.finite(left)) return(req)
+  if (left < 1) .stop("The time limit was reached before this request could be sent.")
+  own <- (req$options$timeout_ms %||% Inf) / 1000      # the request's own timeout
+  req <- httr2::req_timeout(req, max(1, min(left, own)))
+  .retry_policy(req, max_seconds = left)
 }
 
 # Space requests evenly at `rpm` per minute. httr2 >= 1.1 uses a token bucket;
@@ -104,6 +142,7 @@
     }
   }
   if (!is.null(need)) .stop(need)   # a live call, and no key for it
+  req <- .within_deadline(req)      # the time limit of the running tool or episode
   # The last request body is kept for inspection (no keys: those travel in
   # headers or are stripped from URLs): researchAgentR:::.pkg_env$last_body
   .pkg_env$last_body <- req$body$data

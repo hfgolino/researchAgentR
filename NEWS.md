@@ -1,3 +1,40 @@
+# researchAgentR 0.1.2 (November 22, 2026, evening)
+
+Fixes from reading the transcripts of the first full live run of 0.1.1
+against what each activity claims.
+
+* **Time limits reach the web requests.** A tool with a 60-second limit once
+  waited 13 minutes on a service that had stopped answering, because R's time
+  limit cannot interrupt a request that waits on a server. The limit of the
+  running tool call, and `max_seconds` of the episode, now also cap the
+  timeout and the retries of every request made inside them. A model call cut
+  by the episode's limit ends the episode with stop reason `"max_seconds"`.
+* **Structured answers written as text are accepted.** A reply that holds the
+  final answer as one JSON object instead of a call to `final_answer` is
+  checked against the schema and accepted, in the loop and in the final-answer
+  call. After a rejected tool call the model is told to use the tool named
+  `final_answer` (gpt-oss models have called tools named "answer" or "json").
+* **Ollama:** reasoning that a thinking-only model writes into its answer when
+  thinking is switched off (ending with `</think>`) is moved to the reasoning.
+* **`review_manuscript()`:** a finding from a check in code (a recomputed
+  p-value, a DOI that does not resolve) is no longer merged into a model's
+  comment on the same sentence, where it was lost.
+* `plot_episode()` no longer prints a ggplot2 message for an episode with one
+  model call; `print()` of a revision result no longer shows empty parentheses.
+* **Activities.** The EXPECTED OUTPUT comments of all 20 scripts were checked
+  against the transcripts of November 22 and corrected; many now give the
+  values of that recorded run. Activity 05 compares the context strategies
+  with one fixed-size search tool, a compaction threshold that is reached,
+  and a notes scout that is told to take notes. Activities 03, 06 and 07 use
+  `budget(final_call = TRUE)`. Activity 13 says when the World Bank API is
+  not answering; activity 18 runs the local review only when the model is
+  pulled; activities 02 and 13 explain "(invalid tool call)" steps.
+
+Known problems found in the same reading and NOT fixed yet are listed in the
+project notes (benchmark grader for NIH tasks, `fan_out()` in background
+processes, `compare_single_vs_team()`, graders and typographic spaces, search
+tools and `n`, NSF keyword search, Grants.gov dates, `learn_style()` labels).
+
 # researchAgentR 0.1.1 (November 22, 2026)
 
 Changes from the test pass ten days before the December 2026 seminar.

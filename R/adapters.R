@@ -278,13 +278,25 @@
     raw <- if (is.character(args)) args else .json_args(args %||% list())
     .tool_call(tc$id %||% paste0("call_", i), tc$`function`$name, raw)
   })
+  split <- .split_thinking(msg$content %||% "", msg$thinking %||% "")
   list(
-    content = msg$content %||% "", tool_calls = calls, reasoning = msg$thinking %||% "",
+    content = split$content, tool_calls = calls, reasoning = split$reasoning,
     native = msg, native_api = "ollama",
     usage = .usage(input = r$body$prompt_eval_count, output = r$body$eval_count),
     latency = r$latency, stop_reason = r$body$done_reason %||% "",
     cached = r$cached, headers = r$headers, executed_tools = list(), notes = character(0)
   )
+}
+
+# A model that only exists as a thinking model (qwen3:4b, for example) writes
+# its reasoning into the answer when thinking is switched off, ending it with
+# "</think>". The answer is what follows; the rest is reasoning.
+.split_thinking <- function(content, reasoning = "") {
+  cut <- regexpr("</think>", content, fixed = TRUE)
+  if (cut == -1) return(list(content = content, reasoning = reasoning))
+  leaked <- trimws(sub("^\\s*<think>", "", substr(content, 1, cut - 1)))
+  list(content = trimws(substr(content, cut + nchar("</think>"), nchar(content))),
+       reasoning = trimws(paste(c(reasoning[nzchar(reasoning)], leaked), collapse = "\n")))
 }
 
 # Ollama messages: tool results name their tool; assistant turns carry their

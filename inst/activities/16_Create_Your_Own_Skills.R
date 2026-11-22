@@ -61,7 +61,7 @@ example_skill  <- file.path(example_skills, "summarizing-methods")
 list.files(example_skill, recursive = TRUE)
 cat(read_text(file.path(example_skill, "SKILL.md")), sep = "\n")
 
-# EXPECTED OUTPUT: two files, "SKILL.md" and "references/checklist.md". The
+# EXPECTED OUTPUT: two files, "references/checklist.md" and "SKILL.md". The
 # SKILL.md starts with a block between two "---" lines holding `name`,
 # `description`, `license` and `metadata`, then the instructions in Markdown,
 # an input/output example, and a link to references/checklist.md for edge
@@ -177,7 +177,10 @@ apa_grader(good, as.list(apa_tasks[1, ]))
 apa_grader(bad,  as.list(apa_tasks[1, ]))
 
 # EXPECTED OUTPUT: pass TRUE with score 1 for `good`; pass FALSE with score 0
-# for `bad`, and a reason that lists which parts were missing.
+# for `bad`, and a reason that lists which parts were missing. Computed
+# offline, the reason for `bad` reads
+# "effect size: FALSE; 95% CI: FALSE; value within 0.02 of 0.71: FALSE";
+# each result is a list with pass, score, reason and cost (0).
 
 
 # ==============================================================================
@@ -210,7 +213,8 @@ attr(apa_check, "cost")
 
 # EXPECTED OUTPUT: the validate_skill() table for skills/checking-apa-statistics
 # (all [req] rows should pass: the function writes a valid name and quotes
-# the description), and the cost of the single call in US dollars.
+# the description), and the cost of the single call in US dollars. Recorded
+# run (November 22, 2026): every row passed ("Valid skill."), cost 0.0014772.
 
 attr(apa_check, "path")     # the full path of the folder apa_path
 cat(read_text(file.path(apa_path, "SKILL.md")), sep = "\n")
@@ -220,6 +224,9 @@ list.files(apa_path, recursive = TRUE)
 # description that says when to use it, and metadata recording
 # "researchAgentR::create_skill", the model and the date), then step-by-step
 # instructions with an example. Possibly one or more references/*.md files.
+# Recorded run (November 22, 2026): 8 numbered steps and one reference file,
+# references/apa-statistics-7th.md; the draft's own example reported
+# d = 0.68 for the numbers of the first task, where Step 3 computed 0.71.
 #
 # NOW EDIT IT. Open the SKILL.md in RStudio and check every formula and rule
 # against your own knowledge of APA reporting. For example, is the formula
@@ -294,6 +301,9 @@ steps[, c("step", "type", "name", "detail")]
 # the final answer is one sentence with t, p, d and a 95% CI. Whether the
 # skill was loaded is printed as TRUE or FALSE: the model decides, from the
 # description alone, so it is not guaranteed. That is what Step 8 measures.
+# Recorded run (November 22, 2026): 1 model call and 0 tool calls, so
+# load_skill was not called (FALSE); the answer gave t, p and d = .71
+# without a 95% CI; 1,096 tokens, $0.00038.
 
 
 # ==============================================================================
@@ -320,7 +330,10 @@ aggregate(pass ~ id + condition, data = apa_test, FUN = mean)
 # grader_failures (0 with a code grader) and cost. The per-task table shows
 # which prompts the skill fixed and which it did not. With 9 runs per
 # condition, a difference of one or two passes is noise; Activity 09 shows
-# how to put a confidence interval on such a comparison.
+# how to put a confidence interval on such a comparison. Recorded run
+# (November 22, 2026): pass_rate 0 and mean_score 0 in both conditions (all
+# 18 reasons read "effect size: FALSE; 95% CI: FALSE; ..."); cost
+# 0.000274950 without and 0.000796875 with the skill.
 
 
 # ==============================================================================

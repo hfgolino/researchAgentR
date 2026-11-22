@@ -736,6 +736,9 @@ review_checks <- function(path, rules = default_style_rules(), style = NULL, con
   rows <- rows[order(sev, rows$source != "check", rows$file, rows$paragraph, na.last = TRUE), , drop = FALSE]
   # Merge: a later row with the same file and category whose quote contains,
   # or is contained in, a kept row's quote is folded into the kept row.
+  # A finding from a check in code is never folded away: it is a verified
+  # fact (a recomputed p-value, a DOI that does not resolve), and a model's
+  # comment on the same sentence may be about something else.
   rows$merged <- 0L
   keep <- logical(nrow(rows))
   qn <- tolower(.norm_text(rows$quote))
@@ -744,7 +747,7 @@ review_checks <- function(path, rules = default_style_rules(), style = NULL, con
     if (nzchar(qn[i])) for (j in which(keep)) {
       if (rows$file[j] == rows$file[i] && identical(rows$category[j], rows$category[i]) && nzchar(qn[j]) &&
           (grepl(qn[i], qn[j], fixed = TRUE) || grepl(qn[j], qn[i], fixed = TRUE)) &&
-          !(rows$source[i] == "check" && rows$source[j] == "check")) {
+          rows$source[i] != "check") {
         dup <- j
         break
       }
@@ -949,8 +952,9 @@ apply_revisions <- function(review, path, accept, out = NULL, overwrite = FALSE)
 print.revision_result <- function(x, ...) {
   ch <- x$changes
   cat("<revision_result>", paste(x$out, collapse = ", "), "\n")
-  cat(sprintf("%d applied, %d skipped (%s)\n", sum(ch$status == "applied"), sum(ch$status != "applied"),
-              paste(names(table(ch$status[ch$status != "applied"])), collapse = ", ")))
+  skipped <- ch$status[ch$status != "applied"]
+  cat(sprintf("%d applied, %d skipped%s\n", sum(ch$status == "applied"), length(skipped),
+              if (length(skipped)) paste0(" (", paste(unique(skipped), collapse = ", "), ")") else ""))
   for (i in seq_len(nrow(ch))) {
     cat(sprintf("[%d] %s%s\n", ch$id[i], ch$status[i], if (!is.na(ch$line[i])) paste0(" (line ", ch$line[i], ")") else ""))
     if (ch$status[i] == "applied") {

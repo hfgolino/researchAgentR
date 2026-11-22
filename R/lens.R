@@ -604,7 +604,8 @@ plot_episode <- function(episode, what = c("tokens", "cost", "context")) {
   peak <- m[which.max(m$context_tokens), ]
   col <- .lens_palette[["context"]]
   ggplot2::ggplot(m, ggplot2::aes(x = .data$step, y = .data$context_tokens)) +
-    ggplot2::geom_line(colour = col, linewidth = 1.2) +
+    # a line needs two points: an episode with one model call shows the point only
+    (if (nrow(m) > 1) ggplot2::geom_line(colour = col, linewidth = 1.2)) +
     ggplot2::geom_point(colour = col, size = 3) +
     ggplot2::annotate("text", x = peak$step, y = peak$context_tokens,
                       label = sprintf("peak ~%s tokens", .fmt_int(peak$context_tokens)),

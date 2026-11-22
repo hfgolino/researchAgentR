@@ -135,9 +135,10 @@ by_section
 #   02_method_and_simulation.md   7094           27.3       126.7     0.39    3.5          11.4
 #   03_applied_example.md         2094           30.3       232.7     0.48    2.4           6.7
 #   04_discussion.md              1934           32.8       161.2     0.27   10.9          12.9
-# The Discussion uses "we" three times as often as the Method and half as
-# many passives: a section has a style of its own. That is why the test in
-# Step 8 compares Discussion paragraphs with Discussion paragraphs.
+# The Discussion uses "we" three times as often as the Method and fewer
+# passives (0.27 against 0.39): a section has a style of its own. That is
+# why the test in Step 8 compares Discussion paragraphs with Discussion
+# paragraphs.
 
 
 # ==============================================================================
@@ -235,7 +236,9 @@ my_style$exemplars[, c("file", "section", "paragraph")]
 # Register, Recurring moves, Vocabulary, What the author avoids and
 # Checklist. my_style$quotes lists every quotation with found = TRUE or
 # FALSE; a removed quotation appears in the guide as
-# "[quotation removed: not found in the source]".
+# "[quotation removed: not found in the source]". Recorded run (November 22,
+# 2026): 3 source files, 8 exemplars by embedding centrality, 29 quotations
+# checked and 10 removed, cost $0.00252.
 #
 # Read the guide critically: does every claim match the numbers of Step 2?
 
@@ -257,6 +260,8 @@ cat(read_text(file.path(attr(style_check, "path"), "SKILL.md"), n = 30), sep = "
 # passive share, we/our/us, em dashes, semicolons, hedges and citations per
 # 1,000 words, taken from the training profile), the style guide, and a
 # pointer to references/exemplars.md (the exemplar paragraphs, verbatim).
+# The targets are computed in code (no model): 28.6 (sd 13.4), 150, 0.41,
+# 3.7, 0.6, 5.1, 3.4 and 11.9, in the order above.
 # Give it to any agent with use_skills(my_agent, "skills") (Activity 16).
 
 
@@ -292,6 +297,10 @@ attr(rewritten, "style_distance")$distance
 # wording. Compare the two distances: the rewrite should be closer to the
 # style than the plain paragraph. Distances of short texts are noisy (a
 # paragraph is far below the 300-word chunks used for the scale).
+# Recorded run (November 22, 2026): draft distance 1.92 (largest z 6.22, for
+# transitions_per_1k), cost 0.0023307; plain 4.633849, rewrite 1.987679. The
+# draft had one [CITATION NEEDED] but also reused TEFI values of the source
+# paper and pointed to a "Figure 3"; the rewrite added "(see Figure 1)".
 
 
 # ==============================================================================
@@ -334,7 +343,10 @@ c(own_discussion = own_distance$distance,
 # style worked if acc_styled is inside the chance range of Step 4 (0.29 to
 # 0.71) and below acc_unstyled, and if the styled distance is close to the
 # authors' own 0.58. With 12 paragraphs per group, report the numbers with
-# that range, not as a verdict.
+# that range, not as a verdict. Recorded run (November 22, 2026): accuracy
+# 0.958 (styled) and 0.667 (unstyled); distances 0.58 (own), 1.35 (styled)
+# and 1.55 (unstyled). By the rule above the style did not pass: the styled
+# paragraphs were told apart from the real ones more often than the unstyled.
 
 # 8e. Optional: a bag-of-words classifier from llmClassificR (the sister
 #     package of the text classification course) looks at WORDS instead of
@@ -348,7 +360,11 @@ if (requireNamespace("llmClassificR", quietly = TRUE)) {
 
 # EXPECTED OUTPUT (only if llmClassificR and its optional packages tm,
 # glmnet and SnowballC are installed): "Bag-of-words matrix: 24 texts x N
-# terms", an evaluation table with the accuracy, and the top terms per class.
+# terms", repeated warnings that a class has fewer than 8 observations
+# ("dangerous ground"), an evaluation table with the accuracy, the accuracy
+# alone, and the top terms. Recorded run (November 22, 2026): 879 terms,
+# accuracy 0.917, and five top terms, all of the class "generated":
+# exploratori, graph, indic, see, figure.
 
 
 # ==============================================================================
@@ -374,7 +390,9 @@ attr(rewritten, "model")
 
 # EXPECTED OUTPUT: the model string, the date and time of learn_style(), the
 # source labels (the three training files when the data frame of Step 4 is
-# used), and the cost in US dollars.
+# used), the cost in US dollars, and the model string of the rewrite.
+# Recorded run (November 22, 2026): "groq:openai/gpt-oss-120b" twice,
+# "2026-11-22T12:40:03.254-0500" and a cost of 0.0025155.
 
 
 # ==============================================================================
