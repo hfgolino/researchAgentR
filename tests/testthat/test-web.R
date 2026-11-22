@@ -94,7 +94,56 @@ test_that("web tools have the expected schemas and flags", {
   p <- tool_read_page(max_chars = 4000)
   expect_equal(p$name, "read_page")
   expect_true(p$untrusted)
-  expect_equal(p$schema$required, list("url"))
+  expect_equal(p$schema$required, list("url", "find"))
+  expect_true(p$strict)     # every argument required: providers can enforce the schema
+})
+
+test_that("passages around a word are found, merged and kept within a budget", {
+  f <- researchAgentR:::.find_passages
+  filler <- paste(rep("word", 400), collapse = " ")
+  text <- paste(filler, "Cronbach's ALPHA was 0.72.", filler, "The alpha at retest was 0.80.", filler)
+  hit <- f(text, "alpha", budget = 4000, window = 60)
+  expect_equal(hit$n, 2); expect_equal(hit$passages, 2); expect_equal(hit$shown, 2)
+  expect_match(hit$text, "ALPHA was 0.72", fixed = TRUE)       # not case-sensitive
+  expect_match(hit$text, "retest was 0.80", fixed = TRUE)
+  expect_match(hit$text, "^\\[characters [0-9]+ to [0-9]+\\]")
+  near <- f("alpha one and alpha two are close together", "alpha", window = 100)
+  expect_equal(near$n, 2); expect_equal(near$passages, 1)       # overlapping windows merge
+  small <- f(text, "alpha", budget = 150, window = 60)
+  expect_equal(small$shown, 1); expect_equal(small$passages, 2)  # the budget limits what is shown
+  expect_equal(f(text, "omega")$n, 0)
+  expect_equal(f("a.b (c) [d]", "(c)")$n, 1)                    # literal, not a regular expression
+})
+
+test_that("read_page as a tool reads a long page where the needed word is (a recorded page)", {
+  skip_if_not_installed("xml2")
+  d <- withr::local_tempdir()
+  env <- researchAgentR:::.pkg_env
+  old_dir <- env$cache_dir
+  old <- suppressMessages(use_cache("replay", dir = d))
+  on.exit({ suppressMessages(use_cache(old)); env$cache_dir <- old_dir }, add = TRUE)
+  url <- "https://example.org/long-article"
+  filler <- paste(rep("Loneliness was measured in a large survey of older adults.", 100), collapse = " ")
+  html <- paste0("<html><head><title>A long article</title></head><body><p>", filler,
+                 "</p><p>Reliability: Cronbach's alpha was 0.72 in the first study.</p><p>", filler,
+                 "</p></body></html>")
+  req <- researchAgentR:::.request(url, auth = "none")
+  key <- researchAgentR:::.hash(list(url = req$url, body = req$body$data, method = req$method,
+                                     salt = env$cache_salt))
+  researchAgentR:::.cache_write(key, list(body = html, status = 200, latency = 0.1, headers = list(),
+                                          recorded_at = "2026-11-22"))
+  tool <- tool_read_page(max_chars = 2000)
+  top <- call_tool("read_page", list(tool), list(url = url, find = ""))
+  expect_false(top$is_error)
+  expect_match(top$output, "Showing the first 2000 of", fixed = TRUE)
+  expect_match(top$output, "find set to a word", fixed = TRUE)    # the cut says how to read on
+  expect_false(grepl("Cronbach", top$output))
+  hit <- call_tool("read_page", list(tool), list(url = url, find = "cronbach"))
+  expect_match(hit$output, "occurs 1 time", fixed = TRUE)
+  expect_match(hit$output, "alpha was 0.72", fixed = TRUE)
+  none <- call_tool("read_page", list(tool), list(url = url, find = "omega"))
+  expect_match(none$output, "does not occur on this page", fixed = TRUE)
+  expect_true(call_tool("read_page", list(tool), list(url = url))$is_error)   # find is required
 })
 
 test_that("the model cannot widen the researcher's domain allow list", {

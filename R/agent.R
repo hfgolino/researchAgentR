@@ -315,19 +315,28 @@ print.context_strategy <- function(x, ...) {
 # episode often calls it again. The API's tool choice forces final_answer
 # where the provider supports it. A model that answers a forced call with
 # another tool (or none) is told why its reply was rejected and asked again;
-# if the provider refuses the forced choice itself, the next attempt goes
-# without it, and other tool calls are refused in R.
+# if the provider refuses the forced choice itself, or a forced call comes
+# back empty, the next attempt goes without it, and other tool calls are
+# refused in R. The last attempt asks for the answer as JSON text instead.
 # Every failure is recorded as a step, so the trajectory shows it.
 .final_call <- function(agent, ep, messages, tools, reason, verbose, attempts = 4) {
+  say <- function(...) messages <<- c(messages, list(list(role = "user", content = paste0(...))))
   # A model that found little tends to keep searching, so the message says
   # that a partial or empty answer is a valid one.
-  messages <- c(messages, list(list(role = "user", content = paste(
-    "The budget is used up: no other tool will run. Call final_answer now with what you have",
-    "found so far. Leave out anything you could not check; a partial answer, an empty list",
-    "or \"not found\" is a valid answer."))))
+  say("The budget is used up: no other tool will run. Call final_answer now with what you ",
+      "have found so far. Leave out anything you could not check; a partial answer, an empty ",
+      "list or \"not found\" is a valid answer.")
   force <- .force_tool(agent$model, "final_answer")
-  forced_rejections <- 0
+  forced_failures <- 0
   for (k in seq_len(attempts)) {
+    if (k == attempts && attempts > 1) {
+      # Last attempt: the answer as JSON text, for a model that does not
+      # manage the tool call (it is checked against the same schema below).
+      force <- list()
+      say("Last chance. Do not call a tool: write the final answer in your reply as one JSON ",
+          "object with the fields of final_answer (", paste(names(agent$output_schema), collapse = ", "),
+          ") and nothing else.")
+    }
     sent <- agent$context$prepare(messages, ep)
     reply <- tryCatch(do.call(chat, c(list(sent, model = agent$model, tools = tools,
                                            max_tokens = agent$max_tokens, effort = agent$effort), force)),
@@ -342,23 +351,34 @@ print.context_strategy <- function(x, ...) {
       if (length(force)) {
         # One more forced attempt after a model fault; then, or when the
         # provider refuses the forced choice itself, go on without it.
-        forced_rejections <- forced_rejections + 1
-        if (!model_fault || forced_rejections >= 2) force <- list()
+        forced_failures <- forced_failures + 1
+        if (!model_fault || forced_failures >= 2) force <- list()
       }
       if (model_fault) {
-        messages <- c(messages, list(list(role = "user", content = paste0(
-          "Your last reply was rejected: ", .error_line(reply), " No other tool can run now. ",
-          "Call final_answer, with arguments that follow its schema; a partial or empty ",
-          "answer is valid."))))
+        say("Your last reply was rejected: ", .error_line(reply), " No other tool can run now. ",
+            "Call final_answer, with arguments that follow its schema; a partial or empty ",
+            "answer is valid.")
       }
       next
     }
     reply$tool_calls <- .clean_tool_calls(reply$tool_calls, tools)
     ep <- .record_model(ep, reply, sent, verbose)
-    messages <- c(messages, list(.assistant_message(reply)))
     if (!length(reply$tool_calls)) {
-      messages <- c(messages, list(list(role = "user", content = "Call the final_answer tool.")))
-      next
+      # The answer may be in the text of the reply, as JSON.
+      as_call <- .text_as_tool_call(reply$content, "final_answer")
+      if (is.null(as_call)) {
+        # No tool call and no JSON. A FORCED call can come back empty (seen on
+        # Groq with gpt-oss-120b: output tokens billed, nothing returned), so
+        # the next attempt is not forced.
+        force <- list()
+        if (nzchar(paste(reply$content, collapse = ""))) messages <- c(messages, list(.assistant_message(reply)))
+        say("That reply had no call to final_answer. Call the final_answer tool now.")
+        next
+      }
+      reply$tool_calls <- list(as_call)
+      messages <- c(messages, list(list(role = "assistant", content = reply$content)))
+    } else {
+      messages <- c(messages, list(.assistant_message(reply)))
     }
     for (tc in reply$tool_calls) {
       res <- if (tc$name == "final_answer") call_tool(tc, tools) else
@@ -366,14 +386,30 @@ print.context_strategy <- function(x, ...) {
              latency = 0, output = paste("Not run: the budget is used up. Only final_answer can be",
                                          "called now; a partial or empty answer is valid."))
       ep <- .record_tool(ep, tc, res, verbose)
-      messages <- c(messages, list(list(role = "tool", tool_call_id = tc$id, name = tc$name,
-                                        content = res$output, is_error = res$is_error)))
       if (tc$name == "final_answer" && !res$is_error) {
         return(.finish(ep, messages, paste0(reason, "_final_answer"), res$value))
+      }
+      if (identical(tc$id, "text")) {
+        say("The JSON in your reply was not accepted: ", res$output)
+      } else {
+        messages <- c(messages, list(list(role = "tool", tool_call_id = tc$id, name = tc$name,
+                                          content = res$output, is_error = res$is_error)))
       }
     }
   }
   .finish(ep, messages, reason)
+}
+
+# A final answer written as JSON text in a reply instead of a tool call: the
+# text from its first "{" to its last "}", as a tool call, or NULL when that
+# is not one JSON object. call_tool() then checks it against the schema.
+.text_as_tool_call <- function(text, name) {
+  text <- paste(text %||% "", collapse = "\n")
+  found <- regmatches(text, regexpr("(?s)\\{.*\\}", text, perl = TRUE))
+  if (!length(found)) return(NULL)
+  args <- tryCatch(jsonlite::fromJSON(found, simplifyVector = FALSE), error = function(e) NULL)
+  if (!is.list(args) || is.null(names(args))) return(NULL)
+  list(id = "text", name = name, arguments = args, arguments_raw = found)
 }
 
 # The request field that forces one tool, in each API's format; an empty list

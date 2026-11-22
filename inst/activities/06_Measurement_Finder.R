@@ -197,6 +197,19 @@ cat(tool_schema(finder_tools[[2]]), "\n")
 # the schema has a required `query` and an optional `domains` array. The
 # model may narrow the allow list with `domains`, never widen it.
 
+# read_page as a TOOL shows the model the first 4,000 characters of a page and
+# says how to reach the rest: with its `find` argument it returns only the
+# passages around a word, wherever they are on the page. A tool that shows
+# the start of a long page and no way to the rest leads a model to ask for
+# the same page again and again (in a run of 22 November 2026, before `find`
+# existed, the finder requested one page seven times in a row).
+found <- call_tool("read_page", finder_tools, list(url = hits$url[1], find = "reliab"))
+cat(substr(found$output, 1, 900), "\n")
+# EXPECTED OUTPUT: the page title and address, then either '"reliab" occurs N
+# time(s) on this page' followed by passages that start with [characters X
+# to Y], or '"reliab" does not occur on this page'. Both are useful to an
+# agent: the second one tells it to look elsewhere.
+
 # The final answer: an array of instruments. Fields the source may not state
 # (number of items, DOI) are OPTIONAL. A required field forces the model to
 # write something, and a model forced to write a number it does not have may
@@ -223,7 +236,9 @@ finder <- agent(
   instructions = paste(
     "You help a researcher choose a validated self-report instrument.",
     "1. Search OpenAlex for validation studies and web_search for measurement repositories.",
-    "2. Open the most promising pages with read_page. Report only what a page you read,",
+    "2. Open the most promising pages with read_page. On a long page, set its find argument",
+    "   to a word such as 'reliability' or 'alpha' to reach the psychometric results; do not",
+    "   request the same page twice with the same arguments. Report only what a page you read,",
     "   or an abstract in the search results, actually says. Never fill a field from memory.",
     "3. reliability_quote must be copied word for word from the page at source_url",
     "   (or from the abstract of the article with that DOI).",
@@ -462,6 +477,11 @@ save_table(final_table, "measurement_finder_loneliness.csv")   # opens cleanly i
 #   resends the whole context (8K tokens per minute for gpt-oss-120b on the
 #   free tier). Keep max_chars small in tool_read_page(), ask for at most 3
 #   instruments, or use a context strategy (Activity 05).
+# - The finder stops with max_steps_final_answer: it used all its steps and
+#   handed in what it had (final_call = TRUE). The answer can be partial; a
+#   stop reason of max_steps means that even the final call gave no answer.
+#   Read the trajectory before raising the budget: a model that repeats the
+#   same call needs a better tool or instruction, not more steps.
 # - read_page() fails: the address is a PDF ("Download it and read it with
 #   read_documents()"), the site blocks automated readers (403), or the page
 #   needs JavaScript (try via = "jina"). Publisher pages often block readers;

@@ -37,6 +37,19 @@ Changes from the test pass ten days before the December 2026 seminar.
   5.5, Fable): the instruction alone asks for `final_answer`, and any other
   tool call is refused in R. Groq, OpenAI and Claude Haiku are still forced
   through the API's tool choice.
+* The final-answer call is more persistent, after what live runs showed with
+  gpt-oss models on Groq: the model is told that a partial or empty answer is
+  valid (a model that found little kept searching); a reply rejected because
+  the model called another tool, or none, is explained to the model and asked
+  for again; a forced call that comes back empty is followed by an unforced
+  one; and the last of four attempts accepts the answer as JSON text, checked
+  against the same schema.
+* `tool_read_page()` has a second argument for the model, `find`: a cut page
+  now says how to reach the rest, and `find` returns only the passages around
+  a word. Before, a model that needed a number further down a long page
+  requested the same page again and again (seven times in one recorded run).
+  Both arguments are required (`find = ""` reads from the top), so providers
+  that support strict schemas can enforce them.
 * `tool_run_r()` tells the model to use base R and the packages it was given,
   because code written for a package that is not installed costs a failed
   step (and differs from one laptop to the next).

@@ -45,6 +45,13 @@ written to manipulate agents (prompt injection).
 \details{
 The researcher's domain lists are always enforced. The model may narrow
 a search further with its own \code{domains} argument, but cannot widen it.
+
+The page-reading tool has two arguments for the model: \code{url}, and \code{find},
+a word or phrase to look for. A long page is cut at \code{max_chars}, and the
+cut says how to reach the rest: with \code{find}, the tool returns only the
+passages around that word (for example \code{"Cronbach"}), wherever they are on
+the page. A tool that shows the start of a page and no way to the rest
+leads a model to request the same page again and again.
 }
 \examples{
 tool_web_search()

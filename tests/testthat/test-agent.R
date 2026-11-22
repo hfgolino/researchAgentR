@@ -67,3 +67,20 @@ test_that("the forced tool choice follows each API's format", {
   expect_equal(researchAgentR:::.force_tool("openai:gpt-6-luna", "final_answer")$tool_choice,
                list(type = "function", name = "final_answer"))
 })
+
+test_that("a final answer written as JSON text is read as a call to final_answer", {
+  f <- researchAgentR:::.text_as_tool_call
+  tc <- f('Here is the answer:\n```json\n{"count": 11, "note": "from the tool"}\n```', "final_answer")
+  expect_equal(tc$name, "final_answer")
+  expect_equal(tc$arguments, list(count = 11L, note = "from the tool"))
+  expect_null(f("", "final_answer"))
+  expect_null(f("I could not find anything.", "final_answer"))
+  expect_null(f("{not json}", "final_answer"))
+  expect_null(f("[1, 2, 3]", "final_answer"))
+  # the schema check is call_tool()'s: a wrong type is an error observation
+  tool <- researchAgentR:::.final_answer_tool(list(count = arg_integer("A count")))
+  ok <- call_tool(f('{"count": 11}', "final_answer"), list(tool))
+  expect_false(ok$is_error); expect_equal(ok$value$count, 11L)
+  bad <- call_tool(f('{"count": "eleven"}', "final_answer"), list(tool))
+  expect_true(bad$is_error)
+})

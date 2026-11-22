@@ -529,6 +529,13 @@ read_page <- function(url, max_chars = 20000, via = c("direct", "jina")) {
 #' The researcher's domain lists are always enforced. The model may narrow
 #' a search further with its own `domains` argument, but cannot widen it.
 #'
+#' The page-reading tool has two arguments for the model: `url`, and `find`,
+#' a word or phrase to look for. A long page is cut at `max_chars`, and the
+#' cut says how to reach the rest: with `find`, the tool returns only the
+#' passages around that word (for example `"Cronbach"`), wherever they are on
+#' the page. A tool that shows the start of a page and no way to the rest
+#' leads a model to request the same page again and again.
+#'
 #' @inheritParams web_search
 #' @param n Number of results the model sees per search.
 #' @param include_domains Optional allow list set by the researcher, for
@@ -596,18 +603,68 @@ tool_web_search <- function(engine = c("tavily", "searxng", "brave"), n = 5,
 #' @export
 tool_read_page <- function(max_chars = 8000, via = c("direct", "jina")) {
   via <- match.arg(via)
-  fn <- function(url) {
-    p <- read_page(url, max_chars = max_chars, via = via)
-    head <- paste0("Title: ", p$title %|na|% "(none)", "\nURL: ", p$url,
-                   if (p$truncated) paste0("\n(Showing the first ", max_chars, " of ",
-                                           p$chars, " characters.)") else "")
-    .tool_text(c(head, "", p$text), data = p)
+  fn <- function(url, find = "") {
+    p <- read_page(url, max_chars = Inf, via = via)      # the whole page; cut below
+    find <- trimws(find %||% "")
+    head <- paste0("Title: ", p$title %|na|% "(none)", "\nURL: ", p$url)
+    if (nzchar(find)) {
+      hits <- .find_passages(p$text, find, budget = max_chars)
+      body <- if (hits$n == 0) {
+        paste0("\"", find, "\" does not occur on this page (", p$chars, " characters). Try ",
+               "another word, or call read_page with find = \"\" to read from the top.")
+      } else {
+        paste0("\"", find, "\" occurs ", hits$n, " time(s) on this page (", p$chars,
+               " characters). ", if (hits$shown < hits$passages) paste0("The first ", hits$shown,
+               " of ", hits$passages, " passages:") else "The passages:", "\n\n", hits$text)
+      }
+    } else if (p$chars > max_chars) {
+      # A cut page says how to reach the rest: without that, a model asks for
+      # the same page again and again.
+      head <- paste0(head, "\n(Showing the first ", max_chars, " of ", p$chars, " characters. ",
+                     "To read a later part, call read_page again with find set to a word ",
+                     "that should be near it, for example \"reliability\".)")
+      body <- substr(p$text, 1, max_chars)
+    } else {
+      body <- p$text
+    }
+    .tool_text(c(head, "", body), data = p)
   }
   define_tool(fn, name = "read_page",
     description = paste(
       "Read one web page and return its text (title, headings, paragraphs, lists).",
-      "Use it to check what a page actually says before relying on it. Works for HTML",
-      "pages, not PDFs."),
-    args = list(url = arg_string("The full address, starting with https://")),
-    max_output_tokens = ceiling(max_chars / 4) + 200, untrusted = TRUE)
+      "Use it to check what a page actually says before relying on it. A long page is cut:",
+      "to read a later part, set find to a word or phrase that should be near it, and only",
+      "the passages that contain it are returned. Works for HTML pages, not PDFs."),
+    args = list(
+      url = arg_string("The full address, starting with https://"),
+      find = arg_string(paste("A word or phrase to look for on the page (for example 'Cronbach'):",
+                              "only the passages around it are returned. Use an empty string",
+                              "\"\" to read the page from the top."))),
+    max_output_tokens = ceiling(max_chars / 4) + 300, untrusted = TRUE)
+}
+
+# The passages of `text` around each place where `find` occurs (literal, not
+# case-sensitive), within a budget of characters: a long page is read where
+# the needed words are, not from the top. Passages that overlap are merged.
+.find_passages <- function(text, find, budget = 8000, window = 500) {
+  at <- gregexpr(tolower(find), tolower(text), fixed = TRUE)[[1]]
+  if (at[1] == -1) return(list(n = 0, passages = 0, shown = 0, text = ""))
+  from <- pmax(1, at - window)
+  to <- pmin(nchar(text), at + nchar(find) + window)
+  spans <- list(c(from[1], to[1]))
+  for (i in seq_along(from)[-1]) {
+    last <- spans[[length(spans)]]
+    if (from[i] <= last[2]) spans[[length(spans)]][2] <- max(last[2], to[i])
+    else spans[[length(spans) + 1]] <- c(from[i], to[i])
+  }
+  shown <- character(0); used <- 0
+  for (sp in spans) {
+    size <- sp[2] - sp[1] + 1
+    if (length(shown) && used + size > budget) break
+    shown <- c(shown, paste0("[characters ", sp[1], " to ", sp[2], "]\n",
+                             substr(text, sp[1], min(sp[2], sp[1] + budget - 1))))
+    used <- used + size
+  }
+  list(n = length(at), passages = length(spans), shown = length(shown),
+       text = paste(shown, collapse = "\n\n"))
 }
