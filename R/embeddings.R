@@ -158,15 +158,6 @@ embed_texts <- function(texts, model = default_model("embed"), batch_size = 64,
        requests = a$requests + b$requests, cached_requests = a$cached_requests + b$cached_requests)
 }
 
-.need_key <- function(service) {
-  key <- .get_key(service)
-  if (!nzchar(key)) {
-    .stop("No ", service, " key. Add the line ", .key_vars[[service]],
-          "=your-key to ~/.Renviron and restart R (see ?set_keys).")
-  }
-  key
-}
-
 # A list of vectors (as JSON arrays arrive) to a matrix with one row each.
 .rows_to_matrix <- function(x) {
   do.call(rbind, lapply(x, function(v) as.numeric(unlist(v))))
@@ -211,9 +202,9 @@ embed_texts <- function(texts, model = default_model("embed"), batch_size = 64,
 .embed_jina <- function(texts, model, input_type, dimensions) {
   body <- list(model = model, input = as.list(texts), task = .jina_task(input_type))
   if (!is.null(dimensions)) body$dimensions <- as.integer(dimensions)
-  req <- .request("https://api.jina.ai/v1/embeddings", body = body, key = .need_key("jina"),
+  req <- .request("https://api.jina.ai/v1/embeddings", body = body, key = .get_key("jina"),
                   realm = "jina", rpm = .opt("rpm.jina", 100))
-  r <- .perform(req)
+  r <- .perform(req, need = .key_needed("jina"))
   list(embeddings = .data_to_matrix(r$body$data),
        tokens = as.numeric(r$body$usage$total_tokens %||% NA), cached = r$cached)
 }
@@ -225,9 +216,9 @@ embed_texts <- function(texts, model = default_model("embed"), batch_size = 64,
   if (!is.null(dimensions)) body$output_dimension <- as.integer(dimensions)
   # Without a payment method Voyage allows very few requests per minute; set
   # options(researchAgentR.rpm.voyage = 3) to pace requests in that case.
-  req <- .request("https://api.voyageai.com/v1/embeddings", body = body, key = .need_key("voyage"),
+  req <- .request("https://api.voyageai.com/v1/embeddings", body = body, key = .get_key("voyage"),
                   realm = "voyage", rpm = .opt("rpm.voyage"))
-  r <- .perform(req)
+  r <- .perform(req, need = .key_needed("voyage"))
   list(embeddings = .data_to_matrix(r$body$data),
        tokens = as.numeric(r$body$usage$total_tokens %||% NA), cached = r$cached)
 }
@@ -235,9 +226,9 @@ embed_texts <- function(texts, model = default_model("embed"), batch_size = 64,
 .embed_openai <- function(texts, model, input_type, dimensions) {
   body <- list(model = model, input = as.list(texts))
   if (!is.null(dimensions)) body$dimensions <- as.integer(dimensions)
-  req <- .request("https://api.openai.com/v1/embeddings", body = body, key = .need_key("openai"),
+  req <- .request("https://api.openai.com/v1/embeddings", body = body, key = .get_key("openai"),
                   realm = "openai", rpm = .opt("rpm.openai"))
-  r <- .perform(req)
+  r <- .perform(req, need = .key_needed("openai"))
   list(embeddings = .data_to_matrix(r$body$data),
        tokens = as.numeric(r$body$usage$prompt_tokens %||% NA), cached = r$cached)
 }

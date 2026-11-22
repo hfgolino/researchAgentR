@@ -84,7 +84,10 @@
 
 # Perform a request, through the cache when caching is on. Returns a list:
 # body (parsed JSON), status, latency (seconds), headers, cached (logical).
-.perform <- function(req, cache = TRUE) {
+# `need` is the message to stop with when a LIVE call is needed but its key is
+# missing (see .key_needed()): a recorded response replays without the key,
+# so a student without, say, a Tavily key can still replay a recorded search.
+.perform <- function(req, cache = TRUE, need = NULL) {
   mode <- if (cache) .cache_mode() else "off"
   key <- NULL
   if (mode != "off") {
@@ -100,11 +103,15 @@
             .cache_dir(), "). Run it once with use_cache(\"record\") while online.")
     }
   }
+  if (!is.null(need)) .stop(need)   # a live call, and no key for it
   # The last request body is kept for inspection (no keys: those travel in
   # headers or are stripped from URLs): researchAgentR:::.pkg_env$last_body
   .pkg_env$last_body <- req$body$data
   t0 <- Sys.time()
-  resp <- httr2::req_perform(req)
+  # No answer at all (no connection, nothing listening, a timeout) is reported
+  # in plain words instead of as a curl error.
+  resp <- tryCatch(httr2::req_perform(req),
+                   httr2_failure = function(e) .stop(.connection_message(req$url, e)))
   out <- list(
     body = .resp_body(resp),
     status = httr2::resp_status(resp),
@@ -119,7 +126,37 @@
 # Keys and e-mail addresses in the URL are not part of the cache key, so a demo
 # recorded with the instructor's key replays for students with their own key.
 .url_without_secrets <- function(url) {
-  gsub("([?&])(api_key|apikey|key|mailto|email)=[^&]*&?", "\\1", url)
+  url <- gsub("([?&])(api_key|apikey|key|mailto|email)=[^&]*&?", "\\1", url)
+  # no leftover "?" or "&": the cache key is the same with and without the
+  # optional key or e-mail (some students have an OpenAlex key, some do not)
+  sub("[?&]$", "", url)
+}
+
+# The message for a request that got no answer at all.
+.connection_message <- function(url, e) {
+  host <- sub("^(https?://[^/?]+).*$", "\\1", url)
+  detail <- sub("\\s+$", "", conditionMessage(e$parent %||% e))
+  if (grepl("//(localhost|127\\.0\\.0\\.1)(:|$)", host)) {
+    what <- if (grepl(":11434$", host)) {
+      paste("Ollama is not running: open the Ollama app, or run \"ollama serve\" in a",
+            "terminal, then try again. Local models are optional (see Activity 00).")
+    } else {
+      "Start the local server, or check the address and port."
+    }
+    return(paste0("Nothing answered at ", host, ". ", what))
+  }
+  paste0("Could not reach ", host, " (", detail, "). Check the internet connection; ",
+         "a VPN, proxy or firewall can also block the address.")
+}
+
+# NULL when the key for `service` is available; otherwise the message that
+# .perform() stops with if a live call turns out to be needed.
+.key_needed <- function(service, key = .get_key(service), how = NULL,
+                        var = .key_vars[[service]]) {
+  if (nzchar(key)) return(NULL)
+  paste0("No ", service, " key, and no recorded response for this request. Add the line ",
+         var, "=your-key to ~/.Renviron and restart R (see ?set_keys)",
+         if (is.null(how)) "." else paste0("; ", how, "."))
 }
 
 .resp_body <- function(resp) {

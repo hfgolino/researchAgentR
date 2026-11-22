@@ -188,7 +188,11 @@ apa_grader(bad,  as.list(apa_tasks[1, ]))
 # optional reference files (one call with a structured output), writes the
 # folder, and runs validate_skill() on it. Models write instructions, not
 # verified facts: read and edit the draft before using it.
-apa_check <- keep("skill_apa_draft", create_skill(
+# keep() saves the VALUE create_skill() returned, not the folder it wrote. When
+# the kept draft comes from another folder or computer, the folder is missing
+# here, so the draft is made again (from the response cache: no new cost).
+apa_path <- file.path(skills_dir, "checking-apa-statistics")
+apa_check <- keep("skill_apa_draft", refresh = !dir.exists(apa_path), create_skill(
   description = paste(
     "Check that every statistical result in a text is reported in APA style (7th edition)",
     "with an effect size and its 95% confidence interval. Rewrite results that lack them",
@@ -199,7 +203,7 @@ apa_check <- keep("skill_apa_draft", create_skill(
     "Check the Results section of my draft for missing effect sizes.",
     "Rewrite: t(48) = 2.51, p = .016, groups M = 12.3 (SD = 3.0) and M = 10.1 (SD = 3.2), n = 25 each."),
   name = "checking-apa-statistics",
-  dir = skills_dir,
+  dir = skills_dir, overwrite = TRUE,     # keep() decides when this runs at all
   model = "groq:openai/gpt-oss-120b"))
 apa_check
 attr(apa_check, "cost")
@@ -208,7 +212,7 @@ attr(apa_check, "cost")
 # (all [req] rows should pass: the function writes a valid name and quotes
 # the description), and the cost of the single call in US dollars.
 
-apa_path <- attr(apa_check, "path")
+attr(apa_check, "path")     # the full path of the folder apa_path
 cat(read_text(file.path(apa_path, "SKILL.md")), sep = "\n")
 list.files(apa_path, recursive = TRUE)
 

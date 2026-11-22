@@ -115,9 +115,12 @@ for (i in seq_along(chat_models)) {
 }
 # gpt-oss reasoning pass-back on Groq: does sending `reasoning` back work, and does it matter?
 check("loop_groq_pass_reasoning", {
-  old <- options(researchAgentR.pass_reasoning.groq = TRUE); on.exit(options(old))
-  run(make_counter("groq:openai/gpt-oss-120b"), paste0("How many words are in: '", sentence, "'?"),
-      budget(max_steps = 6))
+  # restored with `finally`: on.exit() does nothing in an expression that is
+  # evaluated at top level, and the option would stay on for every later check
+  old <- options(researchAgentR.pass_reasoning.groq = TRUE)
+  tryCatch(run(make_counter("groq:openai/gpt-oss-120b"), paste0("How many words are in: '", sentence, "'?"),
+               budget(max_steps = 6)),
+           finally = options(old))
 }, needs = "GROQ_API_KEY", summary = loop_summary)
 
 # ---- 5. Provider built-in tools and remote MCP ---------------------------------
@@ -322,6 +325,51 @@ if (!is.null(ol) && nrow(ol)) {
     }
   }
 }
+
+# ---- 15. Checks added November 22, 2026 ---------------------------------------------
+# (a) Models added to the registry exist and answer (IDs read from the
+#     providers' model pages on 2026-11-22).
+new_models <- c(openai = "openai:gpt-6.2-sol", openai = "openai:gpt-6.1-terra",
+                anthropic = "anthropic:claude-sonnet-5-5", anthropic = "anthropic:claude-fable-5-2")
+for (i in seq_along(new_models)) {
+  m <- new_models[[i]]
+  check(paste0("chat_", m), chat("Reply with exactly one word: OK", model = m, max_tokens = 400),
+        needs = paste0(toupper(names(new_models)[i]), "_API_KEY"), summary = resp_summary)
+}
+# (b) The final-answer call when the step budget runs out (budget(final_call =
+#     TRUE)), on every API: forced through tool choice where the provider
+#     accepts it (Groq, OpenAI, Claude Haiku), by instruction alone where it
+#     does not (Claude Sonnet answers a forced tool with HTTP 400).
+#     Expected: stop=max_steps_final_answer and the correct count.
+final_models <- c(groq = "groq:openai/gpt-oss-20b", groq = "groq:openai/gpt-oss-120b",
+                  openai = "openai:gpt-6-luna", anthropic = "anthropic:claude-haiku-5-5",
+                  anthropic = "anthropic:claude-sonnet-5-5")
+for (i in seq_along(final_models)) {
+  m <- final_models[[i]]
+  check(paste0("final_call_", m), run(make_counter(m), paste0("How many words are in: '", sentence, "'?"),
+        budget(max_steps = 1, max_cost = 0.05, final_call = TRUE)),
+        needs = paste0(toupper(names(final_models)[i]), "_API_KEY"), summary = loop_summary)
+}
+# (c) Provider-side web search limited to chosen domains, through builtin_tool():
+#     Anthropic's web search tool (US$10 per 1,000 searches; max_uses caps it).
+check("anthropic_web_search_domains", chat(
+  "Which NIH institute funds most research on aging? Answer in one sentence and name the page you used.",
+  model = "anthropic:claude-haiku-5-5", max_tokens = 1500,
+  tools = list(builtin_tool("web_search_20250305", name = "web_search", max_uses = 1,
+                            allowed_domains = list("nih.gov")))),
+  needs = "ANTHROPIC_API_KEY", summary = function(r) paste(resp_summary(r), "| blocks:",
+    paste(vapply(r$executed_tools, function(x) if (is.null(x$type)) "?" else x$type, ""), collapse = ", ")))
+# (d) A live call without its key stops with the key's name, before any request.
+check("missing_key_message", {
+  env <- researchAgentR:::.pkg_env
+  old_env <- Sys.getenv("TAVILY_API_KEY"); old_key <- env$keys$tavily
+  Sys.setenv(TAVILY_API_KEY = ""); env$keys$tavily <- NULL
+  msg <- tryCatch(web_search("a query that was never recorded 20261122", n = 1),
+                  error = function(e) conditionMessage(e),
+                  finally = { Sys.setenv(TAVILY_API_KEY = old_env); env$keys$tavily <- old_key })
+  stopifnot(is.character(msg), grepl("TAVILY_API_KEY", msg))
+  msg
+}, summary = function(x) x)
 
 # ---- Save ---------------------------------------------------------------------------
 res <- do.call(rbind, results)

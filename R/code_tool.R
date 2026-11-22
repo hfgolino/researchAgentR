@@ -216,9 +216,12 @@ tool_run_r <- function(timeout = 30, allow_network = FALSE, packages = NULL,
     if (!is.na(res$error)) .stop("the code failed.\n", text)
     .tool_text(text, data = res)
   }
+  # Tell the model what it can count on: code written for a package that is
+  # not installed on this computer costs a failed step.
   attached <- if (length(packages)) {
-    paste0(" These packages are already attached: ", paste(packages, collapse = ", "), ".")
-  } else ""
+    paste0(" These packages are already attached: ", paste(packages, collapse = ", "),
+           ". Otherwise use base R: other packages may not be installed.")
+  } else " Use base R (stats, utils): other packages may not be installed."
   define_tool(fn, name = "run_r",
     description = paste0(
       "Run R code in a fresh R session and return what it prints. Use it to compute ",

@@ -17,6 +17,13 @@ comments that explain *why*, over clever code. Students read this code.
   handle auth, retries with backoff on 429/5xx, rate limits, readable errors and
   the response cache (`use_cache()`). Do not call `httr2::req_perform()`
   directly.
+- A key is required only for a LIVE call. Do not stop early when a key is
+  missing: build the request and pass `need = .key_needed("<service>")` to
+  `.perform()`, which stops with that message only when no recorded response
+  exists. A student without the key can then replay a recorded demo.
+- The cache key of a request must not depend on who makes it: keys and e-mail
+  addresses in URLs are removed by `.url_without_secrets()`; never put a key
+  in a request body.
 - Every model call goes through `chat()` (R/chat.R). Never call a provider API
   directly.
 - Roxygen with markdown. Every exported function: title, description,

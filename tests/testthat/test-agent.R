@@ -60,4 +60,9 @@ test_that("the forced tool choice follows each API's format", {
                "final_answer")
   expect_equal(researchAgentR:::.force_tool("anthropic:claude-haiku-5-5", "final_answer")$tool_choice$type, "tool")
   expect_length(researchAgentR:::.force_tool("ollama:qwen3:4b", "final_answer"), 0)
+  # Anthropic models that always think reject a forced tool (HTTP 400)
+  expect_length(researchAgentR:::.force_tool("anthropic:claude-sonnet-5-5", "final_answer"), 0)
+  expect_length(researchAgentR:::.force_tool("anthropic:claude-opus-5-5", "final_answer"), 0)
+  expect_equal(researchAgentR:::.force_tool("openai:gpt-6-luna", "final_answer")$tool_choice,
+               list(type = "function", name = "final_answer"))
 })

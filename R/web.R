@@ -185,10 +185,9 @@ web_search <- function(query, n = 5, include_domains = NULL, exclude_domains = N
 # Tavily: https://docs.tavily.com/documentation/api-reference/endpoint/search
 .search_tavily <- function(query, n, include_domains, exclude_domains, depth) {
   key <- .get_key("tavily")
-  if (!nzchar(key)) {
-    .stop("No Tavily key. Add TAVILY_API_KEY=your-key to ~/.Renviron and restart R ",
-          "(free plan: https://app.tavily.com), or use engine = \"searxng\".")
-  }
+  # needed only for a live search: a recorded search replays without the key
+  need <- .key_needed("tavily", key, how = paste("the free plan is at https://app.tavily.com,",
+                                                 "or use engine = \"searxng\""))
   if (length(include_domains) > 300) .stop("Tavily accepts at most 300 include_domains.")
   if (length(exclude_domains) > 150) .stop("Tavily accepts at most 150 exclude_domains.")
   body <- list(query = query, max_results = min(n, 20L), search_depth = depth)
@@ -197,7 +196,7 @@ web_search <- function(query, n = 5, include_domains = NULL, exclude_domains = N
   if (length(exclude_domains)) body$exclude_domains <- as.list(exclude_domains)
   req <- .request("https://api.tavily.com/search", body = body, key = key,
                   realm = "tavily", rpm = 100)
-  r <- .perform(req)
+  r <- .perform(req, need = need)
   hits <- r$body$results %||% list()
   out <- if (length(hits)) {
     data.frame(

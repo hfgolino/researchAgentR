@@ -357,13 +357,20 @@ print.context_strategy <- function(x, ...) {
   .finish(ep, messages, reason)
 }
 
-# The request field that forces one tool, in each API's format (Ollama has none).
+# The request field that forces one tool, in each API's format; an empty list
+# when there is none to send. Ollama has no such field. Anthropic's models
+# that always think (Opus 5.5, Sonnet 5.5, Fable, Mythos) answer a forced
+# tool with HTTP 400; Haiku accepts it
+# (https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools,
+# accessed 2026-11-22). Without the field, the instruction alone asks for
+# final_answer and any other tool call is refused in R.
 .force_tool <- function(model, name) {
-  api <- .provider_info(parse_model(model)$provider)$api
+  m <- parse_model(model)
+  api <- .provider_info(m$provider)$api
   switch(api,
     chat = list(tool_choice = list(type = "function", `function` = list(name = name))),
     responses = list(tool_choice = list(type = "function", name = name)),
-    anthropic = list(tool_choice = list(type = "tool", name = name)),
+    anthropic = if (grepl("haiku", m$model)) list(tool_choice = list(type = "tool", name = name)) else list(),
     list())
 }
 

@@ -100,6 +100,14 @@ register_provider <- function(name, base_url, api = c("chat", "responses", "anth
   .get_key(info$key)
 }
 
+# NULL when the provider needs no key or has one; otherwise the message a
+# LIVE model call stops with (a recorded call replays without the key).
+.provider_key_needed <- function(info) {
+  if (is.na(info$key)) return(NULL)
+  .key_needed(info$provider, .provider_key(info),
+              var = .pkg_env$extra_key_vars[[info$key]] %||% .key_vars[[info$key]])
+}
+
 #' Split a model string into provider and model
 #'
 #' @param model A string such as `"groq:openai/gpt-oss-20b"`. Only the first
@@ -125,30 +133,39 @@ parse_model <- function(model) {
 
 # ---- Model registry ----------------------------------------------------------
 
-# Prices are US dollars per million tokens, from each provider's pricing page
-# (accessed October 10-11, 2026). Free tiers are recorded at list price as a
-# "shadow cost", so episodes can be compared across providers.
-# Columns *_long apply when a request's total prompt reaches long_threshold.
+# Prices are US dollars per million tokens, from each provider's pricing or
+# model pages (first recorded October 10-11, 2026; checked again November 22,
+# 2026). Free tiers are recorded at list price as a "shadow cost", so episodes
+# can be compared across providers.
+# Columns *_long apply when a request's total prompt is over long_threshold:
+# Claude Haiku 5.5 over 100,000 tokens; OpenAI's GPT-6 models over 272,000
+# ("2x input and cache rates and 1.5x output for the full request").
+# cache_write is the short-lived write (Anthropic 5 minutes, OpenAI 30 minutes).
 .default_registry <- function() {
   r <- utils::read.csv(text = "
 provider,model,context_window,max_output,tools,strict,parallel_tools,reasoning,input,cached_input,cache_write,output,long_threshold,input_long,cached_input_long,cache_write_long,output_long,source
-groq,openai/gpt-oss-120b,131072,65536,TRUE,TRUE,FALSE,TRUE,0.15,0.075,NA,0.60,NA,NA,NA,NA,NA,https://groq.com/pricing
-groq,openai/gpt-oss-20b,131072,65536,TRUE,TRUE,FALSE,TRUE,0.075,0.0375,NA,0.30,NA,NA,NA,NA,NA,https://groq.com/pricing
-groq,openai/gpt-oss-safeguard-20b,131072,65536,TRUE,FALSE,FALSE,TRUE,0.075,NA,NA,0.30,NA,NA,NA,NA,NA,https://groq.com/pricing
-groq,qwen/qwen3.8-27b,131072,16384,TRUE,TRUE,TRUE,TRUE,0.80,NA,NA,4.00,NA,NA,NA,NA,NA,https://console.groq.com/docs/models
+groq,openai/gpt-oss-120b,131072,65536,TRUE,TRUE,FALSE,TRUE,0.15,0.075,NA,0.60,NA,NA,NA,NA,NA,https://console.groq.com/docs/model/openai/gpt-oss-120b
+groq,openai/gpt-oss-20b,131072,65536,TRUE,TRUE,FALSE,TRUE,0.075,0.0375,NA,0.30,NA,NA,NA,NA,NA,https://console.groq.com/docs/model/openai/gpt-oss-20b
+groq,openai/gpt-oss-safeguard-20b,131072,65536,TRUE,FALSE,FALSE,TRUE,0.075,0.0375,NA,0.30,NA,NA,NA,NA,NA,https://console.groq.com/docs/model/openai/gpt-oss-safeguard-20b
+groq,qwen/qwen3.8-27b,131072,16384,TRUE,TRUE,TRUE,TRUE,0.80,NA,NA,4.00,NA,NA,NA,NA,NA,https://console.groq.com/docs/model/qwen/qwen3.8-27b
+anthropic,claude-fable-5-2,1000000,128000,TRUE,TRUE,TRUE,TRUE,8,0.20,10,40,NA,NA,NA,NA,NA,https://platform.claude.com/docs/en/about-claude/pricing
 anthropic,claude-opus-5-5,1000000,128000,TRUE,TRUE,TRUE,TRUE,4,0.20,5,20,NA,NA,NA,NA,NA,https://platform.claude.com/docs/en/about-claude/pricing
 anthropic,claude-sonnet-5-5,1000000,128000,TRUE,TRUE,TRUE,TRUE,2,0.10,2.50,10,NA,NA,NA,NA,NA,https://platform.claude.com/docs/en/about-claude/pricing
 anthropic,claude-haiku-5-5,1000000,128000,TRUE,TRUE,TRUE,TRUE,0.10,0.01,0.125,0.50,100000,0.50,0.05,0.625,2.50,https://platform.claude.com/docs/en/about-claude/pricing
-openai,gpt-6-astra,1050000,128000,TRUE,TRUE,TRUE,TRUE,10,1.00,12.50,50,NA,NA,NA,NA,NA,https://developers.openai.com/api/docs/pricing
-openai,gpt-6.1-sol,1050000,128000,TRUE,TRUE,TRUE,TRUE,2,0.10,2.50,10,NA,NA,NA,NA,NA,https://developers.openai.com/api/docs/pricing
-openai,gpt-6-luna,1050000,128000,TRUE,TRUE,TRUE,TRUE,0.10,0.01,0.125,0.50,NA,NA,NA,NA,NA,https://developers.openai.com/api/docs/pricing
+openai,gpt-6.2-astra,1050000,128000,TRUE,TRUE,NA,TRUE,8,0.40,10,40,272000,16,0.80,20,60,https://developers.openai.com/api/docs/models/gpt-6.2-astra
+openai,gpt-6.2-sol,1050000,128000,TRUE,TRUE,NA,TRUE,2,0.10,2.50,10,272000,4,0.20,5,15,https://developers.openai.com/api/docs/models/gpt-6.2-sol
+openai,gpt-6-astra,1050000,128000,TRUE,TRUE,TRUE,TRUE,10,1.00,12.50,50,272000,20,2,25,75,https://developers.openai.com/api/docs/models/gpt-6-astra
+openai,gpt-6.1-sol,1050000,128000,TRUE,TRUE,TRUE,TRUE,2,0.10,2.50,10,272000,4,0.20,5,15,https://developers.openai.com/api/docs/models/gpt-6.1-sol
+openai,gpt-6.1-terra,1050000,128000,TRUE,TRUE,NA,TRUE,1,0.05,1.25,5,272000,2,0.10,2.50,7.50,https://developers.openai.com/api/docs/models/gpt-6.1-terra
+openai,gpt-6-luna,1050000,128000,TRUE,TRUE,TRUE,TRUE,0.10,0.01,0.125,0.50,272000,0.20,0.02,0.25,0.75,https://developers.openai.com/api/docs/models/gpt-6-luna
 gemini,gemini-3.8-flash,NA,NA,TRUE,TRUE,NA,TRUE,0.75,NA,NA,3.75,NA,NA,NA,NA,NA,https://ai.google.dev/gemini-api/docs/pricing
 ollama,qwen3:4b,262144,NA,TRUE,FALSE,NA,TRUE,0,0,0,0,NA,NA,NA,NA,NA,https://registry.ollama.ai/library/qwen3:4b
 ollama,qwen3:8b,40960,NA,TRUE,FALSE,NA,TRUE,0,0,0,0,NA,NA,NA,NA,NA,https://registry.ollama.ai/library/qwen3:8b
 ollama,phi4-mini,131072,NA,TRUE,FALSE,NA,FALSE,0,0,0,0,NA,NA,NA,NA,NA,https://registry.ollama.ai/library/phi4-mini/tags
 ollama,gpt-oss:20b,131072,NA,TRUE,FALSE,NA,TRUE,0,0,0,0,NA,NA,NA,NA,NA,https://registry.ollama.ai/library/gpt-oss
 ", stringsAsFactors = FALSE, strip.white = TRUE)
-  r$checked <- "2026-10-11"
+  r$checked <- "2026-11-22"
+  r$checked[r$provider == "gemini"] <- "2026-10-11"   # not checked again in November
   r
 }
 
@@ -230,7 +247,7 @@ registry_set <- function(model, ...) {
     return(NA_real_)
   }
   prompt <- usage$input + usage$cache_read + usage$cache_write
-  long <- !is.na(info$long_threshold) && prompt >= info$long_threshold
+  long <- !is.na(info$long_threshold) && prompt > info$long_threshold   # "over" the threshold
   price <- function(col) {
     v <- if (long) info[[paste0(col, "_long")]] else info[[col]]
     if (is.na(v) && col != "input") v <- info$input   # no discount listed

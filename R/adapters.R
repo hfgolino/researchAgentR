@@ -28,7 +28,7 @@
   req <- .request(paste0(info$base_url, "/chat/completions"), body = body,
                   auth = if (is.na(info$key)) "none" else "bearer", key = .provider_key(info),
                   realm = m$provider, rpm = .opt(paste0("rpm.", m$provider)))
-  r <- .perform(req)
+  r <- .perform(req, need = .provider_key_needed(info))
   msg <- r$body$choices[[1]]$message
   calls <- lapply(msg$tool_calls %||% list(), function(tc) {
     .tool_call(tc$id, tc$`function`$name, tc$`function`$arguments)
@@ -99,7 +99,7 @@
   req <- .request(paste0(info$base_url, "/responses"), body = body, auth = "bearer",
                   key = .provider_key(info), realm = m$provider,
                   rpm = .opt(paste0("rpm.", m$provider)))
-  r <- .perform(req)
+  r <- .perform(req, need = .provider_key_needed(info))
   out <- r$body$output %||% list()
   text <- character(0); calls <- list(); reasoning <- character(0); executed <- list()
   for (item in out) {
@@ -183,7 +183,7 @@
   req <- .request(paste0(info$base_url, "/messages"), body = body, auth = "anthropic",
                   key = .provider_key(info), realm = m$provider,
                   rpm = .opt(paste0("rpm.", m$provider)))
-  r <- .perform(req)
+  r <- .perform(req, need = .provider_key_needed(info))
   blocks <- r$body$content %||% list()
   text <- character(0); calls <- list(); reasoning <- character(0); executed <- list()
   for (b in blocks) {

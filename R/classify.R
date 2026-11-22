@@ -132,10 +132,8 @@ classify_texts <- function(texts, question, options = NULL, type = c("choice", "
                            model = "jev-1.13.0") {
   type <- match.arg(type)
   key <- .get_key("typesafe")
-  if (!nzchar(key)) {
-    .stop("No TypeSafe key. Add TYPESAFE_API_KEY=your-key to ~/.Renviron and restart R ",
-          "(keys: https://console.typesafe.ai/settings/keys).")
-  }
+  # needed only for live calls: recorded decisions replay without the key
+  need <- .key_needed("typesafe", key, how = "keys: https://console.typesafe.ai/settings/keys")
   q <- .jev_question(question, options, type)
   labels <- if (type == "choice") names(q$criteria) else c("true", "false")
   texts <- as.character(texts)
@@ -146,8 +144,9 @@ classify_texts <- function(texts, question, options = NULL, type = c("choice", "
   for (i in seq_along(texts)) {
     req <- .request(.jev$url, key = key, realm = "typesafe", rpm = .jev$rpm,
                     body = list(model = model, state = texts[i], questions = list(q = q)))
-    r <- tryCatch(.perform(req), error = function(e) e)
+    r <- tryCatch(.perform(req, need = need), error = function(e) e)
     if (inherits(r, "error")) {
+      if (identical(conditionMessage(r), need)) .stop(need)   # no key: stop at once
       errors[i] <- conditionMessage(r)
       rows[[i]] <- .jev_row(NULL, type, labels)
       next

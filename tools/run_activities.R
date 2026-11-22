@@ -15,14 +15,24 @@
 # recordings replay on other days: in class, set the same date with
 #   options(researchAgentR.today = readLines("activity_cache/TODAY.txt", encoding = "UTF-8"))
 #
+# A FRESH run (new recordings, nothing replayed), for example a week before a
+# course, because providers change models, prices and limits:
+#   fresh <- TRUE; live_script <- "run_activities.R"; source("run_live_tests.R")
+# It records into activity_cache_<date>/ and works in activity_work_<date>/, so
+# the earlier recordings stay untouched until the new ones have been checked.
+# Running it again on the same day resumes: what was recorded today replays.
+#
 # Output: live_logs/activities-<timestamp>/<script>.txt and summary.csv
 
 stamp <- format(Sys.time(), "%Y%m%d-%H%M%S")
 root <- getwd()
 out_dir <- file.path(root, "live_logs", paste0("activities-", stamp))
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-cache <- file.path(root, "activity_cache")
+suffix <- if (exists("fresh") && isTRUE(fresh)) format(Sys.Date(), "_%Y%m%d") else ""
+cache <- file.path(root, paste0("activity_cache", suffix))
+work_root <- file.path(root, paste0("activity_work", suffix))
 dir.create(cache, showWarnings = FALSE)
+if (nzchar(suffix)) cat("Fresh run: recording into", basename(cache), "\n")
 today_file <- file.path(cache, "TODAY.txt")
 if (!file.exists(today_file)) writeLines(format(Sys.Date()), today_file)
 today <- readLines(today_file, warn = FALSE, encoding = "UTF-8")[1]
@@ -84,7 +94,7 @@ for (s in scripts) {
   # One working folder per script that persists across runs, as a student's
   # course folder would: files saved when a result was first computed (episode
   # JSON files, data) are still there when keep() later loads that result.
-  work <- file.path(root, "activity_work", sub("\\.R$", "", s))
+  work <- file.path(work_root, sub("\\.R$", "", s))
   dir.create(work, showWarnings = FALSE, recursive = TRUE)
   log <- file.path(out_dir, sub("\\.R$", ".txt", s))
   cat(sprintf("%-46s ", s))
