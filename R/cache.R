@@ -62,12 +62,38 @@ cache_dir <- function() {
   saveRDS(value, f)
 }
 
+# Why a result is not worth keeping: the API failed before any work was done.
+# That is an episode stopped by an API error, a list whose episodes all
+# stopped that way (a team run kept with its workers), or an evaluation in
+# which every trial did. A result with some failures is data and is kept.
+.api_failure <- function(value) {
+  reason <- function(x) {
+    r <- x$stop_reason %||% ""
+    if (length(r) == 1 && grepl("^api_error", r)) r else NULL
+  }
+  if (inherits(value, "episode")) return(reason(value))
+  if (inherits(value, "eval_results")) {
+    r <- as.character(value$stop_reason)
+    if (length(r) && all(grepl("^api_error", r) %in% TRUE)) return(paste("every trial stopped by", r[1]))
+    return(NULL)
+  }
+  if (is.list(value) && !is.data.frame(value)) {
+    eps <- Filter(function(x) inherits(x, "episode"), value)
+    if (length(eps) && all(lengths(lapply(eps, reason)) > 0)) return(reason(eps[[1]]))
+  }
+  NULL
+}
+
 #' Run an expression once and keep its result
 #'
 #' The first call evaluates `expr` and saves the result as `<name>.rds`; later
 #' calls with the same name load the saved result without evaluating `expr`.
 #' Use it around anything slow or costly: an agent run, an evaluation with
 #' many trials, a batch of embeddings.
+#'
+#' A run that the API stopped before any work was done (an episode with stop
+#' reason `"api_error: ..."`, or an evaluation in which every trial ended that
+#' way) is returned with a warning and not saved, so the next call tries again.
 #'
 #' @param name A short file name for the result, such as `"scout_run_1"`.
 #' @param expr The expression to evaluate (only evaluated when needed).
@@ -91,8 +117,9 @@ keep <- function(name, expr, refresh = FALSE, dir = file.path(cache_dir(), "kept
     return(value)
   }
   value <- expr
-  if (inherits(value, "episode") && grepl("^api_error", value$stop_reason %||% "")) {
-    .warn("keep(): '", name, "' ended with ", value$stop_reason, "; not saved, so the next call retries.")
+  failed <- .api_failure(value)
+  if (!is.null(failed)) {
+    .warn("keep(): '", name, "' ended with ", failed, "; not saved, so the next call retries.")
     return(value)
   }
   attr(value, "kept_at") <- .now()

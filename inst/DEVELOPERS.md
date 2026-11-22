@@ -24,6 +24,11 @@ comments that explain *why*, over clever code. Students read this code.
 - The cache key of a request must not depend on who makes it: keys and e-mail
   addresses in URLs are removed by `.url_without_secrets()`; never put a key
   in a request body.
+- Run the unit tests on the oldest supported httr2 (1.0.0) AND on the current
+  one before a release: `R_LIBS=<library with the current httr2> R CMD check`.
+  Newer versions check their arguments more strictly (0.1.2 passed every test
+  on 1.0.0 and failed on every live request on 1.3.0). Numbers given to httr2
+  as seconds or tries are whole numbers.
 - Every model call goes through `chat()` (R/chat.R). Never call a provider API
   directly.
 - Roxygen with markdown. Every exported function: title, description,

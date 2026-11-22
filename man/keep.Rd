@@ -26,6 +26,11 @@ calls with the same name load the saved result without evaluating \code{expr}.
 Use it around anything slow or costly: an agent run, an evaluation with
 many trials, a batch of embeddings.
 }
+\details{
+A run that the API stopped before any work was done (an episode with stop
+reason \code{"api_error: ..."}, or an evaluation in which every trial ended that
+way) is returned with a warning and not saved, so the next call tries again.
+}
 \examples{
 d <- tempfile()
 x <- keep("slow_sum", {Sys.sleep(1); sum(1:10)}, dir = d)   # computes

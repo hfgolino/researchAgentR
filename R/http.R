@@ -33,10 +33,10 @@
 
 # Retry 429 and 5xx responses with exponential backoff, for at most
 # `max_seconds` in total when a time limit is running (see .set_deadline()).
-.retry_policy <- function(req, max_seconds = NULL) {
+.retry_policy <- function(req, max_tries = .opt("max_tries", 4), max_seconds = NULL) {
   httr2::req_retry(
     req,
-    max_tries = .opt("max_tries", 4),
+    max_tries = max_tries,
     max_seconds = max_seconds,
     is_transient = .is_transient,
     backoff = function(i) min(60, 2^i + stats::runif(1))
@@ -69,9 +69,15 @@
   left <- .seconds_left()
   if (!is.finite(left)) return(req)
   if (left < 1) .stop("The time limit was reached before this request could be sent.")
+  # Whole seconds: recent versions of httr2 accept only a whole number of
+  # seconds for retries, and the time left is never one (299.99 seconds a
+  # moment after a 300-second limit was set).
+  left <- floor(left)
   own <- (req$options$timeout_ms %||% Inf) / 1000      # the request's own timeout
-  req <- httr2::req_timeout(req, max(1, min(left, own)))
-  .retry_policy(req, max_seconds = left)
+  req <- httr2::req_timeout(req, min(left, own))
+  # The request keeps its own number of tries (some are sent once only).
+  .retry_policy(req, max_tries = req$policies$retry_max_tries %||% .opt("max_tries", 4),
+                max_seconds = left)
 }
 
 # Space requests evenly at `rpm` per minute. httr2 >= 1.1 uses a token bucket;

@@ -65,14 +65,14 @@
   ep
 }
 
-.finish <- function(ep, messages, reason, answer = NULL) {
+.finish <- function(ep, messages, reason, answer = NULL, verbose = .verbose()) {
   ep$answer <- answer
   ep$stop_reason <- reason
   ep$finished <- .now()
   ep$seconds <- as.numeric(difftime(Sys.time(), ep$t0, units = "secs"))
   ep$messages <- lapply(messages, function(m) m[intersect(names(m), c("role", "content", "tool_call_id", "name", "is_error"))])
   ep$t0 <- NULL
-  if (.verbose()) cat(sprintf("Stopped: %s\n", reason))
+  if (verbose) cat(sprintf("Stopped: %s\n", reason))
   ep
 }
 

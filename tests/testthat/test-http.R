@@ -94,6 +94,13 @@ test_that("a time limit reaches the request: timeout and retries end with the de
   researchAgentR:::.set_deadline(Inf); expect_lte(researchAgentR:::.seconds_left(), 30)
   limited <- researchAgentR:::.within_deadline(req)
   expect_lte(limited$options$timeout_ms, 30000)                           # was 120 seconds
+  # The time left is never a whole number of seconds (29.99...), and recent
+  # versions of httr2 refuse a decimal number of seconds for retries.
+  expect_equal(limited$policies$retry_max_wait %% 1, 0)
+  expect_lte(limited$policies$retry_max_wait, 30); expect_gte(limited$policies$retry_max_wait, 28)
+  expect_equal(limited$policies$retry_max_tries, 4)
+  once <- httr2::req_retry(req, max_tries = 1)                            # a request that is sent once only
+  expect_equal(researchAgentR:::.within_deadline(once)$policies$retry_max_tries, 1)
 
   researchAgentR:::.set_deadline(5)
   short <- researchAgentR:::.request("http://localhost:9/none", auth = "none", timeout = 2)
@@ -101,6 +108,34 @@ test_that("a time limit reaches the request: timeout and retries end with the de
 
   env$deadline <- Sys.time() - 1                                          # the limit has passed
   expect_error(researchAgentR:::.perform(req, cache = FALSE), "time limit was reached")
+})
+
+test_that("a request is really sent under a time limit", {
+  skip_on_cran()   # tries a connection (nothing listens on port 9)
+  env <- researchAgentR:::.pkg_env
+  old <- env$deadline; on.exit(env$deadline <- old)
+  env$deadline <- NULL
+  old_opt <- options(researchAgentR.max_tries = 1)   # older httr2 versions retry a failed connection
+  on.exit(options(old_opt), add = TRUE)
+  # The request fails at the connection, that is, after httr2 accepted the
+  # timeout and the retry settings made from the time left.
+  researchAgentR:::.set_deadline(30)
+  req <- researchAgentR:::.request("http://localhost:9/none", body = list(q = 1), auth = "none")
+  expect_error(researchAgentR:::.perform(req, cache = FALSE), "Nothing answered at http://localhost:9")
+  env$deadline <- NULL
+  status <- define_tool(function() ollama_status("http://localhost:9"), "Status of the local server.",
+                        name = "status", timeout = 10)
+  out <- call_tool("status", list(status), list())     # the tool's time limit is in force
+  expect_true(out$is_error)
+  expect_match(out$output, "Nothing answered at http://localhost:9", fixed = TRUE)
+  # ... and an episode: the model call of run() is made under budget(max_seconds = ).
+  suppressMessages(register_provider("nothing_here", "http://localhost:9/v1", local = TRUE))
+  a <- agent("local", "Answer briefly.", model = "nothing_here:none")
+  ep <- tryCatch(run(a, "Hello", budget(max_steps = 1, max_seconds = 20), verbose = FALSE),
+                 error = function(e) e)
+  reason <- if (inherits(ep, "error")) conditionMessage(ep) else ep$stop_reason
+  expect_match(reason, "Nothing answered at http://localhost", fixed = TRUE)
+  expect_silent(run(a, "Hello", budget(max_steps = 1, max_seconds = 20), verbose = FALSE))   # verbose = FALSE prints nothing
 })
 
 test_that("a tool call sets the deadline for its requests and restores the earlier one", {
@@ -114,4 +149,40 @@ test_that("a tool call sets the deadline for its requests and restores the earli
   expect_false(out$is_error)
   expect_lte(left_inside, 20); expect_gt(left_inside, 18)
   expect_null(env$deadline)                                               # restored after the call
+})
+
+test_that("keep() saves a result once, and does not save a run that the API stopped", {
+  d <- tempfile()
+  n <- 0
+  expect_equal(c(keep("sum", { n <- n + 1; sum(1:10) }, dir = d)), 55)
+  expect_equal(c(suppressMessages(keep("sum", { n <- n + 1; sum(1:10) }, dir = d))), 55)
+  expect_equal(n, 1)                                                      # evaluated once
+  expect_equal(c(keep("sum", { n <- n + 1; 1 }, refresh = TRUE, dir = d)), 1)
+
+  ep <- function(reason) {
+    a <- agent("a", "Answer briefly.", model = "groq:openai/gpt-oss-20b")
+    e <- researchAgentR:::.new_episode(a, "task", budget())
+    researchAgentR:::.finish(e, list(), reason, verbose = FALSE)
+  }
+  failed <- ep("api_error: HTTP 401 Unauthorized."); done <- ep("final_answer")
+  expect_warning(keep("ep_failed", failed, dir = d), "not saved")
+  expect_false(file.exists(file.path(d, "ep_failed.rds")))
+  keep("ep_done", done, dir = d); expect_true(file.exists(file.path(d, "ep_done.rds")))
+  keep("ep_steps", ep("max_steps"), dir = d)                              # a run that hit a limit is a result
+  expect_true(file.exists(file.path(d, "ep_steps.rds")))
+
+  # a team run kept with its workers: not saved when the lead never got an answer from the API
+  expect_warning(keep("team_failed", list(lead = failed, workers = list()), dir = d), "not saved")
+  expect_false(file.exists(file.path(d, "team_failed.rds")))
+  keep("several", list(failed, done), dir = d)                            # one of two worked: kept
+  expect_true(file.exists(file.path(d, "several.rds")))
+
+  # an evaluation: not saved when every trial was stopped by the API
+  ev <- function(reasons) structure(data.frame(task_id = seq_along(reasons), stop_reason = reasons,
+                                               stringsAsFactors = FALSE), class = c("eval_results", "data.frame"))
+  expect_warning(keep("eval_failed", ev(c("api_error: x", "api_error: x")), dir = d), "every trial")
+  expect_false(file.exists(file.path(d, "eval_failed.rds")))
+  keep("eval_mixed", ev(c("api_error: x", "final_answer")), dir = d)
+  expect_true(file.exists(file.path(d, "eval_mixed.rds")))
+  expect_null(researchAgentR:::.api_failure(data.frame(stop_reason = "api_error: x")))   # a plain table is data
 })

@@ -5,3 +5,4 @@
 *.tar.gz
 .claude/
 .DS_Store
+testthat-problems.rds

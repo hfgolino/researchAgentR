@@ -1,3 +1,22 @@
+# researchAgentR 0.1.3 (November 22, 2026, night)
+
+* **Fix: time limits with httr2 1.3.0.** The time limit added in 0.1.2 gave
+  httr2 the time left as a decimal number of seconds (299.99). httr2 1.3.0
+  accepts only a whole number of seconds for retries, so every live request
+  made inside an episode or a tool call stopped before it was sent, with
+  "`max_seconds` must be a whole number". The time left is now rounded down
+  to whole seconds. The unit tests passed because they ran on httr2 1.0.0,
+  which does not check this; they now run on httr2 1.0.0 and 1.3.0, and one
+  test really sends a request under a time limit.
+* A request that is sent once only (`ollama_status()`, closing an MCP
+  session, Semantic Scholar without a key) keeps its own number of tries
+  under a time limit; 0.1.2 gave it the default of four.
+* `keep()` does not save a run that the API stopped before any work was done:
+  besides a single episode (as before), a list whose episodes all ended with
+  `api_error` (a team run kept with its workers) and an evaluation in which
+  every trial did. The next call then tries again instead of loading a failure.
+* `run(verbose = FALSE)` no longer prints the "Stopped: ..." line.
+
 # researchAgentR 0.1.2 (November 22, 2026, evening)
 
 Fixes from reading the transcripts of the first full live run of 0.1.1

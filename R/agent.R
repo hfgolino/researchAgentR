@@ -142,7 +142,7 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
           isTRUE(budget$final_call)) {
         return(.final_call(agent, ep, messages, tools, reason, verbose))
       }
-      return(.finish(ep, messages, reason))
+      return(.finish(ep, messages, reason, verbose = verbose))
     }
     sent <- agent$context$prepare(messages, ep)
     ep <- .record_context(ep, sent, agent$context$name)   # e.g. the cost of a summary
@@ -152,8 +152,8 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
       error = function(e) e)
     if (inherits(reply, "error")) {
       if (!.invalid_tool_call(reply)) {
-        if (.seconds_left() < 1) return(.finish(ep, messages, "max_seconds"))   # the request ran out of time
-        return(.finish(ep, messages, paste("api_error:", .plain(conditionMessage(reply)))))
+        if (.seconds_left() < 1) return(.finish(ep, messages, "max_seconds", verbose = verbose))   # the request ran out of time
+        return(.finish(ep, messages, paste("api_error:", .plain(conditionMessage(reply))), verbose = verbose))
       }
       # The provider rejected a malformed tool call (for example a tool that
       # does not exist): count it as a tool error and let the model retry.
@@ -169,7 +169,7 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
     ep <- .record_model(ep, reply, sent, verbose)
     messages <- c(messages, list(.assistant_message(reply)))
     if (length(reply$tool_calls) == 0) {
-      if (is.null(agent$output_schema)) return(.finish(ep, messages, "final_answer", reply$content))
+      if (is.null(agent$output_schema)) return(.finish(ep, messages, "final_answer", reply$content, verbose = verbose))
       # A structured answer written as JSON text instead of a call to
       # final_answer is accepted when it follows the schema.
       as_call <- .text_as_tool_call(reply$content, "final_answer")
@@ -177,7 +177,7 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
         res <- call_tool(as_call, tools)
         if (!res$is_error) {
           ep <- .record_tool(ep, as_call, res, verbose)
-          return(.finish(ep, messages, "final_answer", res$value))
+          return(.finish(ep, messages, "final_answer", res$value, verbose = verbose))
         }
       }
       messages <- c(messages, list(list(role = "user", content =
@@ -194,7 +194,7 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
       messages <- c(messages, list(list(role = "tool", tool_call_id = tc$id, name = tc$name,
                                         content = res$output, is_error = res$is_error)))
       if (tc$name == "final_answer" && !res$is_error) {
-        return(.finish(ep, messages, "final_answer", res$value))
+        return(.finish(ep, messages, "final_answer", res$value, verbose = verbose))
       }
     }
   }
@@ -406,7 +406,7 @@ print.context_strategy <- function(x, ...) {
                                          "called now; a partial or empty answer is valid."))
       ep <- .record_tool(ep, tc, res, verbose)
       if (tc$name == "final_answer" && !res$is_error) {
-        return(.finish(ep, messages, paste0(reason, "_final_answer"), res$value))
+        return(.finish(ep, messages, paste0(reason, "_final_answer"), res$value, verbose = verbose))
       }
       if (identical(tc$id, "text")) {
         say("The JSON in your reply was not accepted: ", res$output)
@@ -416,7 +416,7 @@ print.context_strategy <- function(x, ...) {
       }
     }
   }
-  .finish(ep, messages, reason)
+  .finish(ep, messages, reason, verbose = verbose)
 }
 
 # A final answer written as JSON text in a reply instead of a tool call: the
