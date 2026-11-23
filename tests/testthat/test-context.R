@@ -167,7 +167,8 @@ test_that("ctx_notes shows the notes and provides the note tools", {
   sent <- strat$prepare(msgs, NULL)
   expect_match(sent[[3]]$content, "Your notes so far", fixed = TRUE)
   expect_match(sent[[3]]$content, "## Sources", fixed = TRUE)
-  expect_match(sent[[4]]$content, "2 earlier messages removed", fixed = TRUE)
+  expect_match(sent[[4]]$content, "2 earlier messages were removed", fixed = TRUE)
+  expect_match(sent[[4]]$content, "do not repeat a call whose result is in the notes", fixed = TRUE)
   expect_identical(sent[5:6], msgs[5:6])
 })
 

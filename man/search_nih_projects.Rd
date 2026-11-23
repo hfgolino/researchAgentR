@@ -32,8 +32,11 @@ match).}
 
 \item{project_nums}{Optional vector of project numbers, to look projects up
 instead of searching by topic. A full number names one award year
-(\code{"5R01MH123456-03"}); \code{*} stands for any characters, so
-\code{"*R01MH123456*"} finds every year of that project.}
+(\code{"5R01MH123456-03"}); a \code{*} at the end stands for any characters, so
+\code{"5R01MH123456*"} finds every year of that award. RePORTER does not
+accept a \code{*} at the start: to look a project up by its core number
+(\code{R01MH123456}), give the nine possible type digits,
+\code{paste0(1:9, "R01MH123456", "*")}.}
 
 \item{...}{Other RePORTER criteria passed as they are, for example
 \code{org_names = list("UNIVERSITY OF VIRGINIA")}.}
@@ -64,6 +67,6 @@ nih <- search_nih_projects("ecological momentary assessment loneliness",
 nih[, c("project_num", "title", "award_amount")]
 attr(nih, "total")
 # Look one project up by its number, in every fiscal year:
-search_nih_projects(project_nums = paste0("*", sub("^[0-9]|-.*$", "", nih$project_num[1]), "*"))
+search_nih_projects(project_nums = sub("-.*$", "*", nih$project_num[1]))
 }
 }

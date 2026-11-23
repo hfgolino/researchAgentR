@@ -260,9 +260,11 @@ finder
 # STEP 5: RUN IT
 # ==============================================================================
 
-# final_call = TRUE: a finder that is still searching at step 14 gets one more
-# call to hand in what it has (stop reason "max_steps_final_answer"). Such an
-# answer can be partial, one more reason to check every entry (STEPS 6 and 7).
+# final_call = TRUE: a finder that is still searching at step 14, or that is
+# stopped by three tool errors in a row, gets one more call to hand in what
+# it has (stop reason "max_steps_final_answer" or
+# "max_tool_errors_final_answer"). Such an answer can be partial, one more
+# reason to check every entry (STEPS 6 and 7).
 finder_budget <- budget(max_steps = 14, max_tokens = 100000, max_cost = 0.08,
                         max_seconds = 600, max_tool_errors = 3, final_call = TRUE)
 finder_task <- paste0(
@@ -273,10 +275,12 @@ ep_finder <- keep("act06_finder", run(finder, finder_task, budget = finder_budge
 ep_finder
 episode_steps(ep_finder)[, c("step", "type", "name", "input", "output", "cost", "is_error")]
 view_episode(ep_finder)
-# EXPECTED OUTPUT: <episode> with stop reason final_answer, or
-# max_steps_final_answer when the finder used all 14 steps and handed in what
-# it had; model and tool calls, billed tokens, peak context and cost; the
-# step table shows searches, page reads and the verify_citations call.
+# EXPECTED OUTPUT: <episode> with stop reason final_answer; or
+# max_steps_final_answer when the finder used all 14 steps, or
+# max_tool_errors_final_answer after three failed tool calls in a row, and
+# handed in what it had. Then model and tool calls, billed tokens, peak
+# context and cost; the step table shows searches, page reads (publisher
+# pages often answer 403 or 404) and the verify_citations call.
 
 # The structured answer as a data frame (the same helper as in Activity 03).
 answer_table <- function(items) {
@@ -477,9 +481,14 @@ save_table(final_table, "measurement_finder_loneliness.csv")   # opens cleanly i
 #   resends the whole context (8K tokens per minute for gpt-oss-120b on the
 #   free tier). Keep max_chars small in tool_read_page(), ask for at most 3
 #   instruments, or use a context strategy (Activity 05).
-# - The finder stops with max_steps_final_answer: it used all its steps and
-#   handed in what it had (final_call = TRUE). The answer can be partial; a
-#   stop reason of max_steps means that even the final call gave no answer.
+# - The finder stops with max_steps_final_answer or
+#   max_tool_errors_final_answer: it ran out of steps, or three tool calls in
+#   a row failed, and it handed in what it had (final_call = TRUE). The answer
+#   can be partial; a stop reason of max_steps or max_tool_errors without
+#   "_final_answer" means that even the final call gave no answer.
+# - "(invalid tool call) Parsing failed" steps: the provider could not read
+#   the model's reply (seen on Groq when a gpt-oss model writes a long tool
+#   call). The step counts as a tool error and the model tries again.
 #   Read the trajectory before raising the budget: a model that repeats the
 #   same call needs a better tool or instruction, not more steps.
 # - read_page() fails: the address is a PDF ("Download it and read it with

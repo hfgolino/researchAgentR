@@ -22,6 +22,11 @@ R 4.1 or later works; R 4.3 or later is recommended. No Python is needed.
 Optional features use packages from `Suggests` (`callr`, `xml2`, `pdftools`,
 `ggplot2`, `reticulate` and others) and say so when one is missing.
 
+**Course participants:** follow the step-by-step [setup guide](inst/SETUP.md)
+(R and RStudio, packages, the three free API keys and where to get them, the
+setup check, costs and troubleshooting). After installing the package,
+`setup_guide()` opens the same guide in R.
+
 ## Keys
 
 Keys live only in `~/.Renviron`, one per line, and are read with
@@ -81,6 +86,7 @@ register_provider("myserver", "http://localhost:8080/v1", local = TRUE)   # any 
 
 | Area | Main functions |
 |---|---|
+| Setup | `setup_guide()`, `verify_setup()`, `set_groq_key()` and relatives |
 | Models | `chat()`, `ask()`, `providers()`, `model_registry()`, `set_default_model()` |
 | Tools | `define_tool()`, `arg_string()` and relatives, `call_tool()`, `builtin_tool()`, `remote_mcp_tool()` |
 | Agent loop | `agent()`, `run()`, `budget()` |

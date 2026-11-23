@@ -17,8 +17,8 @@ test_that("NIH criteria follow the RePORTER v2 field names", {
   extra <- .nih_criteria("x", org_names = list("UNIVERSITY OF VIRGINIA"))
   expect_equal(extra$org_names, list("UNIVERSITY OF VIRGINIA"))
   expect_length(.nih_criteria(), 0)
-  # project_nums is an array even for one number; "*" is the API's wildcard
-  expect_equal(.nih_criteria(project_nums = "*R01MH000001*")$project_nums, list("*R01MH000001*"))
+  # project_nums is an array even for one number; "*" at the end is the API's wildcard
+  expect_equal(.nih_criteria(project_nums = "5R01MH000001*")$project_nums, list("5R01MH000001*"))
   expect_equal(as.character(.to_json(.nih_criteria(project_nums = list("5R01MH000001-02")))),
                "{\"project_nums\":[\"5R01MH000001-02\"]}")
 })

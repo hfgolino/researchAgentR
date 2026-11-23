@@ -47,7 +47,7 @@ Rules:
 
 | Script | Session | Main functions |
 |---|---|---|
-| 00_Setup_researchAgentR.R | before class | set_*_key, verify_setup, ollama_status, providers, register_provider, model_registry, registry_set, parse_model, default_model, set_default_model, list_provider_models, use_cache, cache_dir, keep, setup_python_env, activate_python_env |
+| 00_Setup_researchAgentR.R | before class | setup_guide, set_*_key, verify_setup, ollama_status, providers, register_provider, model_registry, registry_set, parse_model, default_model, set_default_model, list_provider_models, use_cache, cache_dir, keep, setup_python_env, activate_python_env |
 | 01_Lens_Watch_an_Agent.R | Day 1 | chat, ask, builtin_tool, count_tokens, view_episode, view_episodes, episode_steps, episodes_df, save_episode, read_episode, plot_episode, reliability_curve |
 | 02_Loop_First_Tool_and_Agent.R | Day 1 | define_tool, arg_string, arg_number, arg_integer, arg_boolean, arg_enum, arg_array, arg_object, tool_schema, call_tool, agent, run, budget, ctx_full |
 | 03_Literature_Scout_and_Verification.R | Day 1 | search_openalex, get_work, get_references, get_citations, search_crossref, search_semantic_scholar, search_europepmc, search_arxiv, find_open_access, normalize_doi, dedupe_records, prisma_counts, tool_openalex, tool_crossref, tool_semantic_scholar, tool_europepmc, tool_arxiv, tool_unpaywall, tool_snowball, verify_citations, tool_verify_citations, check_claims |

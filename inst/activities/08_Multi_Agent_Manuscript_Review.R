@@ -270,7 +270,8 @@ if (length(child_ids)) episode_steps(sub_episodes(child_ids[1]))[, c("step", "ty
 section_tasks <- paste0("Review the section '", setdiff(review_sections, "References"),
                         "'. Return the issues you find in it.")
 fan <- fan_out(section_reviewer, section_tasks,
-               budget = budget(max_steps = 4, max_cost = 0.01, max_seconds = 120))
+               budget = budget(max_steps = 4, max_cost = 0.01, max_seconds = 120,
+                               final_call = TRUE))   # out of steps: hand in what was found
 fan
 summary(fan)
 # EXPECTED OUTPUT: a first line that counts the runs with and without an
@@ -280,8 +281,10 @@ summary(fan)
 # processes and wall-clock time is below the summed time; the COST is the
 # same either way. A background process starts with an empty workspace:
 # fan_out() copies to it the objects that the agent's tools use (here `docs`,
-# which read_section() reads). A run can end without an R error and without
-# an answer (max_steps, max_tool_errors): read the stop_reason column.
+# which read_section() reads). A reviewer that uses its 4 steps hands in what
+# it found (stop reason max_steps_final_answer, because of final_call = TRUE).
+# A run can still end without an R error and without an answer: read the
+# stop_reason column.
 
 fan_issues <- do.call(rbind, lapply(fan, function(e)
   if (length(e$answer$issues)) do.call(rbind, lapply(e$answer$issues, as.data.frame))))

@@ -5,3 +5,4 @@
 ^\.claude$
 ^tools$
 \.DS_Store$
+^LICENSE\.md$

@@ -14,6 +14,7 @@
 # run again offline. Python is NOT needed (one optional step at the end).
 #
 # researchAgentR functions used here:
+#   setup_guide()                             the step-by-step guide (sign-up pages, costs)
 #   set_groq_key(), set_openalex_key(), ...   read each key from ~/.Renviron
 #   verify_setup()                            check R, packages, keys, services
 #   providers(), register_provider()          the model providers the package knows
@@ -50,13 +51,18 @@ library(researchAgentR)
 stopifnot(packageVersion("researchAgentR") >= "0.1.0")
 packageVersion("researchAgentR")
 
+# The same steps as a guide to read (where to sign up for each key, what the
+# free plans allow, what to do when something fails):
+setup_guide()
+
 # Copy the activity scripts into your course folder:
 file.copy(system.file("activities", package = "researchAgentR"), ".", recursive = TRUE)
 
 use_cache("auto")      # explained in STEP 9; every activity starts with this line
 
-# EXPECTED OUTPUT: the package version (0.1.0 or later), TRUE from
-# file.copy(), and a message "Cache mode: auto (<a folder on your computer>)".
+# EXPECTED OUTPUT: the package version (0.1.0 or later), the setup guide in a
+# new tab (in RStudio), TRUE from file.copy(), and a message "Cache mode: auto
+# (<a folder on your computer>)".
 
 
 # ==============================================================================

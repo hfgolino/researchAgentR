@@ -305,8 +305,12 @@ ctx_notes <- function(file = tempfile(fileext = ".md"), keep_last = 4) {
         "Your notes so far (kept outside the conversation; add to them with note_write):\n", notes))))
     }
     if (removed > 0 && nzchar(notes)) {
-      extra <- c(extra, list(.user_note(sprintf(
-        "[%d earlier messages removed to save context; your notes keep what matters]", removed))))
+      # Said plainly as well: a small model with two of three results in its
+      # notes searched for all three again, until max_steps.
+      extra <- c(extra, list(.user_note(sprintf(paste(
+        "[%d earlier messages were removed to save context. Your notes above record what they",
+        "held: do not repeat a call whose result is in the notes. Do what is still missing,",
+        "note it, then give the answer.]"), removed))))
     }
     if (removed > 0 && !nzchar(notes)) {
       # Said plainly: a model that kept no notes repeats the calls it no

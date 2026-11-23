@@ -1,3 +1,48 @@
+# researchAgentR 0.1.5 (November 23, 2026)
+
+Changes after the live run of 0.1.4 (smoke test: 82 OK, 1 FAIL, the optional
+Semantic Scholar search without a key).
+
+* **Setup guide for participants.** `inst/SETUP.md` (also linked from the
+  README) takes a participant through R and RStudio, the packages, the three
+  free API keys and where to get them, `.Renviron`, the setup check, what the
+  free plans allow, optional extras and troubleshooting. `setup_guide()`
+  opens it in R. Versions, limits and prices were checked on the providers'
+  pages on November 23, 2026.
+* **The final-answer call, after its first live run.** It passed the live
+  checks on Groq (20b and 120b), OpenAI and Claude (Haiku and Sonnet), with a
+  short and a long answer, and three things went wrong in the activities:
+  - It did not run after tool errors. With `budget(final_call = TRUE)`, an
+    agent stopped by `max_tool_errors` now hands in what it has (stop reason
+    `"max_tool_errors_final_answer"`), as it does when it runs out of steps
+    or tokens. In activity 06 Groq answered three of the model's replies with
+    "Parsing failed", and the finder ended without an answer.
+  - A small model tried to call a tool although none was offered, and Groq
+    refused the reply ("Tool choice is none, but model called a tool"). Such
+    a refusal is now answered and the call is made again (up to three
+    attempts).
+  - A scout returned an empty list after ten steps of searching: it had been
+    told to "leave out anything that was not checked", and it had first spent
+    all 4,096 output tokens on reasoning. The call is now a new, short
+    conversation (write the answer of an assistant that ran out of budget,
+    from its instructions and a log of its work), asks for little reasoning,
+    and says to report what the tool results support.
+* `ctx_notes()`: the note about removed messages says not to repeat a call
+  whose result is in the notes (a scout with two of three results noted
+  searched for all three again until `max_steps`). Activity 08: the parallel
+  reviewers use `final_call = TRUE` (four of eight had run out of steps).
+* `write_in_style()` asks for little reasoning and tries once more with twice
+  the room when a reply comes back empty with stop reason "length" (activity
+  17: "The model returned no text").
+* **NIH lookup by number.** RePORTER accepts `*` only at the end of a project
+  number: a `*` in front returned nothing in the live test. The benchmark
+  grader and the documentation of `search_nih_projects(project_nums = )` now
+  use the form that works (the nine type digits in front of the core number).
+* Activity 00: the Jina key is optional (it is used only in the self-study
+  Activity 15), so a participant with the three required keys runs the script
+  without an error.
+* `LICENSE.md` (the GPL-3 text) for the GitHub repository.
+
 # researchAgentR 0.1.4 (November 23, 2026)
 
 The open issues from reading the transcripts of the first full live run, and

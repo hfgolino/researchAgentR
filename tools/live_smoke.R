@@ -192,14 +192,15 @@ check("nih_grader_by_number", {
   found <- objects[["search_nih_projects"]]
   if (is.null(found) || !nrow(found)) stop("no NIH project to check with (the search above failed)")
   core <- sub("-.*$", "", sub("^[1-9]", "", found$project_num[1]))
-  by_number <- search_nih_projects(project_nums = paste0("*", core, "*"), fiscal_years = 2025, n = 10)
+  by_number <- search_nih_projects(project_nums = paste0(1:9, core, "*"), fiscal_years = 2025, n = 10)
+  if (!nrow(by_number)) stop("the lookup by number returned no rows for ", core)
   grade <- researchAgentR:::.grader_nih_fy(2025, "ecological momentary assessment")
   real <- grade(paste("Project", found$project_num[1]), list(id = "smoke"))
   fake <- grade("Project 5R01MH000000-01", list(id = "smoke"))
   if (!isTRUE(real$pass)) stop("a project returned by the search did not pass its own grader: ", real$reason)
   if (isTRUE(fake$pass)) stop("a project number that does not exist passed the grader")
   list(core = core, rows = nrow(by_number), reason = real$reason)
-}, summary = function(x) paste0(x$core, ": ", x$rows, " row(s) with *number*; ", x$reason))
+}, summary = function(x) paste0(x$core, ": ", x$rows, " row(s) by number; ", x$reason))
 check("search_nsf_awards", search_nsf_awards("psychometrics", n = 3),
       summary = function(d) paste(nrow(d), "rows;", paste(names(d), collapse = ",")))
 # Several words: NSF matches any of them, so the package asks for the rarest

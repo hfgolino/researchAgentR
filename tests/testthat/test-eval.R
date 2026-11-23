@@ -231,24 +231,22 @@ test_that("the research_tasks benchmark is well formed", {
 })
 
 test_that("the NIH grader looks each project up by its number (the search itself is replaced here)", {
-  # The grader's logic only: which lookups it makes and how it reads the rows.
+  # The grader's logic only: which lookup it makes and how it reads the rows.
   # The record is made up (serial 000001); the live check is in tools/live_smoke.R.
   asked <- list()
   record <- data.frame(project_num = "5R01MH000001-02", title = "Ecological momentary assessment of mood",
                        abstract = "Daily surveys.", fiscal_year = 2025L, stringsAsFactors = FALSE)
-  first_form_works <- FALSE
   testthat::local_mocked_bindings(search_nih_projects = function(..., project_nums = NULL, fiscal_years = NULL, n = 25) {
     asked[[length(asked) + 1]] <<- list(nums = project_nums, fy = fiscal_years)
-    known <- any(grepl("R01MH000001", project_nums)) && 2025 %in% fiscal_years
-    if (!known || (!first_form_works && any(startsWith(project_nums, "*")))) record[0, ] else record
+    if (any(grepl("R01MH000001", project_nums)) && 2025 %in% fiscal_years) record else record[0, ]
   }, .package = "researchAgentR")
   grade <- researchAgentR:::.grader_nih_fy(2025, "ecological momentary assessment")
   out <- grade("The project 5R01MH000001-02 fits.", list(id = "t"))
   expect_true(out$pass)
-  expect_equal(asked[[1]], list(nums = "*R01MH000001*", fy = 2025))        # by number, not as free text
-  expect_equal(asked[[2]]$nums, paste0(1:9, "R01MH000001*"))               # the documented form, tried second
-  first_form_works <- TRUE; asked <- list()
-  expect_true(grade("R01MH000001", list(id = "t"))$pass); expect_length(asked, 1)
+  # by number, not as free text: the nine type digits, "*" only at the end
+  expect_equal(asked[[1]], list(nums = paste0(1:9, "R01MH000001*"), fy = 2025))
+  expect_length(asked, 1)
+  expect_true(grade("R01MH000001", list(id = "t"))$pass)
   expect_false(grade("R01MH000001 and R21AG000002", list(id = "t"))$pass)  # one number cannot be verified
   expect_false(researchAgentR:::.grader_nih_fy(2024, "ecological momentary assessment")("R01MH000001", list(id = "t"))$pass)
   expect_false(researchAgentR:::.grader_nih_fy(2025, "item response theory")("R01MH000001", list(id = "t"))$pass)

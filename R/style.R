@@ -741,7 +741,17 @@ write_in_style <- function(brief_or_draft, style, model = default_model("lead"),
     paste0("Rewrite the following draft in the style. Keep every claim, number and ",
            "citation; change only the wording.\n\n<draft>\n", brief_or_draft, "\n</draft>")
   }
-  r <- chat(user, model = model, system = system, max_tokens = max_tokens)
+  # Little reasoning is asked for: a reasoning model once spent all its output
+  # tokens thinking about the guide and returned no text (stop reason
+  # "length"). If that still happens, the call is made once more with twice
+  # the room, and both calls are counted in the cost.
+  effort <- .light_effort(model)
+  r <- chat(user, model = model, system = system, max_tokens = max_tokens, effort = effort)
+  cost <- r$cost
+  if (!nzchar(r$content %||% "") && identical(r$stop_reason, "length")) {
+    r <- chat(user, model = model, system = system, max_tokens = 2 * max_tokens, effort = effort)
+    cost <- cost + r$cost
+  }
   text <- r$content %||% ""
   if (!nzchar(text)) .stop("The model returned no text (stop reason: ", r$stop_reason, ").")
   added <- .added_content(text, brief_or_draft)
@@ -749,7 +759,7 @@ write_in_style <- function(brief_or_draft, style, model = default_model("lead"),
     .msg("write_in_style(): not in the ", if (mode == "draft") "brief" else "draft",
          ", so added by the model (check each one): ", paste(added, collapse = ", "), ".")
   }
-  structure(text, style_distance = style_distance(text, style), added = added, cost = r$cost,
+  structure(text, style_distance = style_distance(text, style), added = added, cost = cost,
             model = r$model, response = r)
 }
 

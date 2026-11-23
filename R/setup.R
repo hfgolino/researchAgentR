@@ -107,3 +107,25 @@ ollama_status <- function(host = "http://localhost:11434") {
              size_gb = round(vapply(m, function(x) as.numeric(x$size %||% NA), numeric(1)) / 1e9, 2),
              stringsAsFactors = FALSE)
 }
+
+#' Open the setup guide for course participants
+#'
+#' The step-by-step guide to what a participant installs before the course:
+#' R and RStudio, the packages, the three free API keys (Groq, OpenAlex,
+#' Tavily) and where to get them, the `.Renviron` file, the setup check, what
+#' the free plans allow, optional extras and troubleshooting. The guide is the
+#' file `SETUP.md` of the package.
+#'
+#' @param show Show the guide (in RStudio, in a new tab)? `FALSE` only returns
+#'   the path.
+#' @return The path of the guide, invisibly.
+#' @examples
+#' setup_guide(show = FALSE)
+#' @export
+setup_guide <- function(show = interactive()) {
+  path <- system.file("SETUP.md", package = "researchAgentR")
+  if (!nzchar(path)) .stop("The setup guide was not found in the installed package.")
+  if (show) file.show(path, title = "researchAgentR: setup guide")
+  invisible(path)
+}
+

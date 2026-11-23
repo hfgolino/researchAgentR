@@ -186,3 +186,14 @@ test_that("keep() saves a result once, and does not save a run that the API stop
   expect_true(file.exists(file.path(d, "eval_mixed.rds")))
   expect_null(researchAgentR:::.api_failure(data.frame(stop_reason = "api_error: x")))   # a plain table is data
 })
+
+test_that("the setup guide ships with the package and names the three required keys", {
+  path <- setup_guide(show = FALSE)
+  expect_true(file.exists(path))
+  guide <- read_text(path)
+  for (key in c("GROQ_API_KEY", "OPENALEX_API_KEY", "TAVILY_API_KEY", "RESEARCHAGENTR_EMAIL")) {
+    expect_true(any(grepl(key, guide, fixed = TRUE)), info = key)
+  }
+  expect_true(any(grepl("verify_setup(test_apis = TRUE)", guide, fixed = TRUE)))
+  expect_false(any(grepl("—", guide)))     # no em dashes
+})

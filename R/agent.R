@@ -77,14 +77,15 @@ print.agent <- function(x, ...) {
 #'   price list; the number here is only an example).
 #' @param max_seconds Maximum wall-clock time.
 #' @param max_tool_errors Stop after this many failed tool calls in a row.
-#' @param final_call When `max_steps` or `max_tokens` is reached by an agent
-#'   with an `output_schema`, allow one more model call to hand in what the
-#'   agent has so far. That call has no tools: the work done is sent as text
-#'   and the model replies with the answer as JSON, which is checked against
-#'   the schema (and asked for once more if it does not pass). The episode
-#'   then stops with `"max_steps_final_answer"` or
-#'   `"max_tokens_final_answer"` (a possibly partial answer: check it)
-#'   instead of stopping with no answer. Useful for workers of a team.
+#' @param final_call When an agent with an `output_schema` reaches
+#'   `max_steps` or `max_tokens`, or is stopped by `max_tool_errors`, allow one
+#'   more model call to hand in what it has so far. That call has no tools:
+#'   the work done is sent as text and the model replies with the answer as
+#'   JSON, which is checked against the schema (and asked for once more if it
+#'   does not pass). The episode then stops with `"max_steps_final_answer"`,
+#'   `"max_tokens_final_answer"` or `"max_tool_errors_final_answer"` (a
+#'   possibly partial answer: check it) instead of stopping with no answer.
+#'   Useful for workers of a team.
 #' @return An object of class `budget`.
 #' @examples
 #' budget(max_steps = 6, max_cost = 0.01)
@@ -139,8 +140,10 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
   repeat {
     reason <- .over_budget(ep, budget)
     if (!is.null(reason)) {
-      if (reason %in% c("max_steps", "max_tokens") && !is.null(agent$output_schema) &&
-          isTRUE(budget$final_call)) {
+      # Out of steps or tokens, or stopped by tool errors in a row: with
+      # budget(final_call = TRUE) the agent hands in what it has (see .final_call()).
+      if (reason %in% c("max_steps", "max_tokens", "max_tool_errors") &&
+          !is.null(agent$output_schema) && isTRUE(budget$final_call)) {
         return(.final_call(agent, ep, messages, tools, reason, verbose))
       }
       return(.finish(ep, messages, reason, verbose = verbose))
@@ -223,19 +226,17 @@ run <- function(agent, task, budget = researchAgentR::budget(), verbose = .verbo
   ), class = "agent_tool")
 }
 
-.system_prompt <- function(agent, finish = TRUE) {
-  how <- if (!finish) {
-    NULL    # the final-answer call says how to answer in its own message
-  } else if (is.null(agent$output_schema)) {
+.system_prompt <- function(agent) {
+  finish <- if (is.null(agent$output_schema)) {
     "When the task is complete, reply with the answer as plain text and do not call a tool."
   } else {
     "When the task is complete, call the final_answer tool with arguments that follow its schema."
   }
-  paste(c(agent$instructions,
-          # options(researchAgentR.today = "2026-12-01") pins the date, so a run
-          # recorded on one day replays from the cache on another.
-          paste0("Today's date is ", .opt("today", format(Sys.Date())), "."),
-          .untrusted_rule, how), collapse = "\n\n")
+  paste(agent$instructions,
+        # options(researchAgentR.today = "2026-12-01") pins the date, so a run
+        # recorded on one day replays from the cache on another.
+        paste0("Today's date is ", .opt("today", format(Sys.Date())), "."),
+        .untrusted_rule, finish, sep = "\n\n")
 }
 
 .assistant_message <- function(reply) {
@@ -328,65 +329,97 @@ print.context_strategy <- function(x, ...) {
          "Use it, change the arguments, or finish.]")
 }
 
-# Out of steps (or tokens) with a structured answer due: one more model call
-# to hand in what the agent has found. Small models often keep searching; a
-# partial, structured answer (marked in the stop reason) is more useful to a
-# lead agent, and to a researcher, than nothing.
+# Out of steps or tokens, or stopped by tool errors in a row, with a
+# structured answer due: one more model call to hand in what the agent has
+# found. Small models often keep searching; a partial, structured answer
+# (marked in the stop reason) is more useful to a lead agent, and to a
+# researcher, than nothing.
 #
-# The call offers NO tools. The work so far is given as plain text and the
-# model replies with the answer as one JSON object, which is checked against
-# the schema like any call to final_answer. Why not ask for a call to
-# final_answer, forced with the provider's tool choice? That was the first
-# design. In live runs on Groq with gpt-oss models (November 2026) the model
-# called another tool or none, the provider rejected a correct call (it read
-# the tool name as "final_answer<|channel|>commentary"), or the reply came
-# back empty with 800 output tokens billed. A request without tools has none
-# of these failure modes, on any provider. Every failure is recorded as a
-# step, so the trajectory shows it.
-.final_call <- function(agent, ep, messages, tools, reason, verbose, attempts = 2) {
+# The call offers NO tools and is a new, short conversation: the model is
+# asked to write the answer of an assistant that ran out of budget, from that
+# assistant's instructions and a log of its work (task, tool calls, results),
+# as one JSON object. The object is checked against the schema like any call
+# to final_answer. Why not ask the agent itself for a call to final_answer,
+# forced with the provider's tool choice? That was the first design. In live
+# runs on Groq with gpt-oss models (November 2026) the model called another
+# tool or none, the provider rejected a correct call (it read the tool name as
+# "final_answer<|channel|>commentary"), or the reply came back empty with 800
+# output tokens billed. Three more lessons from live runs are in the code
+# below: little reasoning is asked for, an attempt to call a tool is answered
+# and tried again, and the model is told to report what the log supports
+# (told to "leave out what was not checked", a scout returned an empty list).
+# Every failure is recorded as a step, so the trajectory shows it.
+.final_call <- function(agent, ep, messages, tools, reason, verbose, attempts = 3) {
   prepared <- agent$context$prepare(messages, ep)
   ep <- .record_context(ep, prepared, agent$context$name)   # e.g. the cost of a summary
   msgs <- .final_request(agent, prepared)
   ask <- msgs[[2]]$content
+  # Writing down what was found needs little reasoning: a small model once
+  # spent all 4,096 output tokens on reasoning and returned nothing.
+  effort <- agent$effort %||% .light_effort(agent$model)
+  max_tokens <- agent$max_tokens
   for (k in seq_len(attempts)) {
-    reply <- tryCatch(chat(msgs, model = agent$model, max_tokens = agent$max_tokens,
-                           effort = agent$effort), error = function(e) e)
+    reply <- tryCatch(chat(msgs, model = agent$model, max_tokens = max_tokens, effort = effort),
+                      error = function(e) e)
     if (inherits(reply, "error")) {
       ep <- .record_invalid_call(ep, reply, verbose, label = "(final call failed)")
-      break                                        # a network or account error: stop
+      # A model that has called tools all episode may try once more, and the
+      # provider refuses ("Tool choice is none, but model called a tool"):
+      # say so and ask again. Any other error (network, account) ends it.
+      if (!.tool_call_refused(reply)) break
+      problem <- "you tried to call a tool, and no tool exists in this conversation."
+    } else {
+      ep <- .record_model(ep, reply, msgs, verbose)
+      answer <- .text_as_tool_call(reply$content, "final_answer")
+      res <- if (!is.null(answer)) call_tool(answer, tools)     # the schema check
+      if (!is.null(res)) ep <- .record_tool(ep, answer, res, verbose)
+      if (!is.null(res) && !res$is_error) {
+        messages <- c(messages, list(
+          list(role = "user", content = "[Final-answer call: the work above was sent as a log, without tools.]"),
+          list(role = "assistant", content = reply$content)))
+        return(.finish(ep, messages, paste0(reason, "_final_answer"), res$value, verbose = verbose))
+      }
+      problem <- if (is.null(res)) "it held no JSON object." else res$output
+      if (identical(reply$stop_reason, "length")) max_tokens <- 2 * agent$max_tokens   # cut off: more room
     }
-    ep <- .record_model(ep, reply, msgs, verbose)
-    answer <- .text_as_tool_call(reply$content, "final_answer")
-    res <- if (!is.null(answer)) call_tool(answer, tools)     # the schema check
-    if (!is.null(res)) ep <- .record_tool(ep, answer, res, verbose)
-    if (!is.null(res) && !res$is_error) {
-      messages <- c(messages, list(
-        list(role = "user", content = "[Final-answer call: the work above was sent as text, without tools.]"),
-        list(role = "assistant", content = reply$content)))
-      return(.finish(ep, messages, paste0(reason, "_final_answer"), res$value, verbose = verbose))
-    }
-    # Ask once more, saying what was wrong. (One user message, rewritten: an
+    # Ask again, saying what was wrong. (One user message, rewritten: an
     # empty reply cannot be sent back as an assistant message.)
-    problem <- if (is.null(res)) "it held no JSON object" else res$output
     msgs[[2]]$content <- paste0(ask, "\n\nYour previous reply was not accepted: ", problem,
-                                "\nReply again with ONE JSON object that follows the schema, and nothing else.")
+                                "\nReply again with ONE JSON object that follows the schema, as plain text.")
   }
   .finish(ep, messages, reason, verbose = verbose)
 }
 
-# The request of the final-answer call: the agent's instructions, then one
-# message with the work so far as text, what is asked, and the schema.
+# The request of the final-answer call: a system message that sets the job
+# (write the answer from a log; no tools), then one message with the agent's
+# instructions, the log of its work, what is asked, and the schema.
 .final_request <- function(agent, prepared) {
-  work <- .transcript(Filter(function(m) !identical(m$role, "system"), prepared), max_tool_tokens = NULL)
-  ask <- paste0(
-    "The budget is used up: no tool can run any more. Above is the work done so far ",
-    "(the request, each tool call and its result). Give the final answer now, from that ",
-    "material only. Leave out anything that was not found or checked: a partial answer, an ",
-    "empty list or \"not found\" is a valid answer.\n\n",
+  log <- .transcript(Filter(function(m) !identical(m$role, "system"), prepared), max_tool_tokens = NULL)
+  system <- paste(
+    paste("You finish the work of a research assistant that ran out of budget. You receive the",
+          "instructions it worked under and a log of its work: the task, each tool call and each",
+          "result. Write its final answer from the log. No tools exist in this conversation:",
+          "reply with text only and never try to call a tool."),
+    paste0("Today's date is ", .opt("today", format(Sys.Date())), "."),
+    .untrusted_rule, sep = "\n\n")
+  user <- paste0(
+    "The assistant's instructions:\n<instructions>\n", agent$instructions, "\n</instructions>\n\n",
+    "The log of its work:\n<log>\n", log, "\n</log>\n\n",
+    "Write the final answer now. Report what the tool results in the log support, also where the ",
+    "assistant did not finish checking it, and add nothing that is not in the log. Leave out an ",
+    "item or an optional field that the log does not support. If the log holds nothing that ",
+    "answers the task, return empty lists.\n\n",
     "Reply with ONE JSON object and nothing else. It must follow this JSON Schema:\n",
     .to_json(.final_answer_tool(agent$output_schema)$schema))
-  list(list(role = "system", content = .system_prompt(agent, finish = FALSE)),
-       list(role = "user", content = paste0(work, "\n\n", ask)))
+  list(list(role = "system", content = system), list(role = "user", content = user))
+}
+
+# Did the provider refuse a reply because the model tried to call a tool
+# where none can be called (or called one wrongly)?
+.tool_call_refused <- function(e) {
+  .invalid_tool_call(e) ||
+    grepl("called a tool|tool choice is none|did not call a tool|could not be parsed",
+          conditionMessage(e), ignore.case = TRUE)
 }
 
 # A final answer written as JSON text in a reply instead of a tool call: the

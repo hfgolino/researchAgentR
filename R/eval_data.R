@@ -79,17 +79,11 @@
 
 .nih_project_matches <- function(core, fiscal_year, terms) {
   # RePORTER writes a project number as type digit + core number + support
-  # year (5R01MH123456-03) and has one record per fiscal year. The core
-  # number is looked up with "*" (any characters) on both sides; if that
-  # form finds nothing, with the nine possible type digits in front, which is
-  # the form shown in the API documentation (https://api.reporter.nih.gov/).
-  lookup <- function(patterns) {
-    tryCatch(search_nih_projects(project_nums = patterns, fiscal_years = fiscal_year, n = 50),
-             error = function(e) e)
-  }
-  res <- lookup(paste0("*", core, "*"))
-  if (inherits(res, "error") || !nrow(res)) res <- lookup(paste0(1:9, core, "*"))
-  if (inherits(res, "error")) .stop("NIH RePORTER could not be asked about ", core, ": ", conditionMessage(res))
+  # year (5R01MH123456-03) and has one record per fiscal year. "*" stands for
+  # any characters at the END of a number (https://api.reporter.nih.gov/), so
+  # the core number is asked for with each of the nine type digits in front.
+  # (A "*" in front as well returned nothing in a live test, November 23, 2026.)
+  res <- search_nih_projects(project_nums = paste0(1:9, core, "*"), fiscal_years = fiscal_year, n = 50)
   if (!nrow(res)) return(FALSE)
   text <- paste(res$title, res$abstract)
   hit <- grepl(core, toupper(res$project_num), fixed = TRUE) &
