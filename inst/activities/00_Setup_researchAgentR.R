@@ -79,17 +79,17 @@ usethis::edit_r_environ()
 #                                     key OpenAlex allows a much smaller daily budget)
 #   TAVILY_API_KEY=tvly-...           https://app.tavily.com (free plan with
 #                                     monthly credits; web search for agents)
-#   JINA_API_KEY=jina_...             https://jina.ai (free key; embeddings and
-#                                     the page reader)
 #   RESEARCHAGENTR_EMAIL=you@university.edu
 #                                     not a key: your e-mail, sent to Crossref and
 #                                     Unpaywall so your requests join their
 #                                     "polite pool" (faster, more reliable)
 #
-# OPTIONAL PAID keys (never required; each activity marks them as optional):
-#   OPENAI_API_KEY=sk-...             https://platform.openai.com/api-keys
-#   ANTHROPIC_API_KEY=sk-ant-...      https://platform.claude.com
-#   TYPESAFE_API_KEY=...              https://console.typesafe.ai/settings/keys (Jev)
+# OPTIONAL keys (never required; each activity marks them as optional):
+#   JINA_API_KEY=jina_...             https://jina.ai (free key; embeddings in
+#                                     the self-study Activity 15, and a page reader)
+#   OPENAI_API_KEY=sk-...             https://platform.openai.com/api-keys (paid)
+#   ANTHROPIC_API_KEY=sk-ant-...      https://platform.claude.com (paid)
+#   TYPESAFE_API_KEY=...              https://console.typesafe.ai/settings/keys (Jev; paid)
 #   VOYAGE_API_KEY=pa-...             https://dash.voyageai.com (embeddings;
 #                                     check the site for the free starting allowance)
 #
@@ -116,12 +116,12 @@ library(researchAgentR)
 set_groq_key()
 set_openalex_key()
 set_tavily_key()
-set_jina_key()
 
 # EXPECTED OUTPUT: one line per key, such as "groq key set (gsk_******abcd)".
 
 # Optional keys: try() turns the error for a key you do not have into a
 # message and lets the script continue.
+try(set_jina_key())
 try(set_openai_key())
 try(set_anthropic_key())
 try(set_typesafe_key())
