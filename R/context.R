@@ -304,9 +304,17 @@ ctx_notes <- function(file = tempfile(fileext = ".md"), keep_last = 4) {
       extra <- c(extra, list(.user_note(paste0(
         "Your notes so far (kept outside the conversation; add to them with note_write):\n", notes))))
     }
-    if (removed > 0) {
+    if (removed > 0 && nzchar(notes)) {
       extra <- c(extra, list(.user_note(sprintf(
         "[%d earlier messages removed to save context; your notes keep what matters]", removed))))
+    }
+    if (removed > 0 && !nzchar(notes)) {
+      # Said plainly: a model that kept no notes repeats the calls it no
+      # longer sees (seen live: the same three searches until max_steps).
+      extra <- c(extra, list(.user_note(sprintf(paste(
+        "[%d earlier messages were removed to save context, and your notes are EMPTY: what",
+        "those messages held is lost. From now on, call note_write right after every tool",
+        "call that returns something you need, before any other call.]"), removed))))
     }
     .drop_orphans(c(messages[p$head], extra, messages[unlist(kept)]))
   }

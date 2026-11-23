@@ -158,7 +158,11 @@ test_that("ctx_notes shows the notes and provides the note tools", {
   strat <- ctx_notes(f, keep_last = 1)
   expect_equal(vapply(strat$tools, `[[`, "", "name"), c("note_write", "note_read"))
   msgs <- list(sys, task, call_msg("a"), result_msg("a"), call_msg("b"), result_msg("b"))
-  expect_length(strat$prepare(msgs, NULL), 5)       # no notes yet: head, removal note, last turn
+  empty <- strat$prepare(msgs, NULL)
+  expect_length(empty, 5)                           # no notes yet: head, removal note, last turn
+  expect_match(empty[[3]]$content, "your notes are EMPTY", fixed = TRUE)   # said plainly: what was removed is lost
+  expect_match(empty[[3]]$content, "note_write", fixed = TRUE)
+  expect_length(strat$prepare(msgs[1:4], NULL), 4)  # nothing removed yet: nothing to say
   call_tool("note_write", strat$tools, arguments = list(text = "DOI 10.1037/met0000255", section = "Sources"))
   sent <- strat$prepare(msgs, NULL)
   expect_match(sent[[3]]$content, "Your notes so far", fixed = TRUE)

@@ -30,12 +30,13 @@ price list; the number here is only an example).}
 \item{max_tool_errors}{Stop after this many failed tool calls in a row.}
 
 \item{final_call}{When \code{max_steps} or \code{max_tokens} is reached by an agent
-with an \code{output_schema}, allow one more call in which the model can only
-call \code{final_answer}, with what it has so far (asked again, up to four
-times, if the reply is rejected). The episode then stops with
-\code{"max_steps_final_answer"} or \code{"max_tokens_final_answer"} (a forced,
-possibly partial answer: check it) instead of stopping with no answer.
-Useful for workers of a team.}
+with an \code{output_schema}, allow one more model call to hand in what the
+agent has so far. That call has no tools: the work done is sent as text
+and the model replies with the answer as JSON, which is checked against
+the schema (and asked for once more if it does not pass). The episode
+then stops with \code{"max_steps_final_answer"} or
+\code{"max_tokens_final_answer"} (a possibly partial answer: check it)
+instead of stopping with no answer. Useful for workers of a team.}
 }
 \value{
 An object of class \code{budget}.

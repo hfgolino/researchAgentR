@@ -1,8 +1,26 @@
-# researchAgentR 0.1.4 (November 22, 2026, late night)
+# researchAgentR 0.1.4 (November 23, 2026)
 
-The open issues from reading the transcripts of the first full live run.
-None of these changes has run live yet; the checks marked (live check) are
-in `tools/live_smoke.R`.
+The open issues from reading the transcripts of the first full live run, and
+a new final-answer call. None of these changes has run live yet; the checks
+marked (live check) are in `tools/live_smoke.R`.
+
+## The final-answer call
+
+* **`budget(final_call = TRUE)` now makes one request without tools.** The
+  work so far is sent as plain text and the model replies with the answer as
+  JSON, which is checked against the schema (and asked for once more if it
+  does not pass). The earlier design asked for a call to `final_answer`,
+  forced with the provider's tool choice. In the live run of November 22
+  that failed in four of five episodes on Groq with gpt-oss models
+  (activities 06 and 14): the model called another tool or none, Groq
+  rejected a correct call (it read the tool name as
+  `final_answer<|channel|>commentary`), or the reply came back empty with
+  about 800 output tokens billed. A request without tools has none of these
+  failure modes and is the same on every provider (live check, with a short
+  and a long answer).
+* `ctx_notes()`: when turns were removed and the notes file is empty, the
+  model is told so plainly (it said "your notes keep what matters"); a scout
+  that kept no notes repeated the same three searches until `max_steps`.
 
 ## Evaluation
 
@@ -69,7 +87,9 @@ in `tools/live_smoke.R`.
 
 ## Activities
 
-* 03: `n_databases`. 07: NSF and Grants.gov outputs explained. 08:
+* 03: `n_databases`. 05: the scouts are told not to answer from memory, and
+  the comments name the outcomes seen in live runs. 07: NSF and Grants.gov
+  outputs explained. 08:
   `total_tokens` in the single-versus-team comparison; fan-out comments.
   08b: an unknown tool is a protocol error in the specification and a tool
   error on DeepWiki; the code handles both. 10: the cascade is compared with

@@ -266,7 +266,8 @@ verified <- function(ep) doi_grader(ep$answer, list(answer = expected_dois))$pas
 scout_instructions <- paste(
   "You find scholarly articles. Search OpenAlex once for each article the user lists,",
   "check that title, journal and year match, and finish with one line per article:",
-  "the title and its DOI. Never guess a DOI; write 'not found' instead.")
+  "the title and its DOI. Never guess a DOI and never answer from memory: a DOI counts",
+  "only if a search returned it in this conversation; otherwise write 'not found'.")
 
 # One search tool for every strategy, with a FIXED number of results. With
 # tool_openalex() the model may ask for fewer results than n, and the scouts
@@ -330,6 +331,13 @@ check_network(episodes)
 # A scout that needs 3 searches finishes in about 4 model calls (7 with
 # notes). The window scout often searches again for what it has forgotten
 # and stops with max_steps: more tokens, no answer.
+# One run per strategy is an anecdote, and a small model varies from run to
+# run. Each of these happened in live runs of this step (November 2026): a
+# scout wrote "not found" for an article that another scout found (its search
+# words were different); a scout answered from memory without one search (and
+# was wrong); a notes scout never called note_write and repeated the same
+# three searches until max_steps. Read the steps before reading the table,
+# and see Exercise 1 for repeated runs.
 
 episodes$full$answer
 # EXPECTED OUTPUT: three lines, each a title and a DOI (or "not found").

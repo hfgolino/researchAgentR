@@ -364,9 +364,8 @@ for (i in seq_along(new_models)) {
         needs = paste0(toupper(names(new_models)[i]), "_API_KEY"), summary = resp_summary)
 }
 # (b) The final-answer call when the step budget runs out (budget(final_call =
-#     TRUE)), on every API: forced through tool choice where the provider
-#     accepts it (Groq, OpenAI, Claude Haiku), by instruction alone where it
-#     does not (Claude Sonnet answers a forced tool with HTTP 400).
+#     TRUE)), on every API. The call has no tools: the work so far is sent as
+#     text and the model answers with JSON, which is checked against the schema.
 #     Expected: stop=max_steps_final_answer and the correct count.
 final_models <- c(groq = "groq:openai/gpt-oss-20b", groq = "groq:openai/gpt-oss-120b",
                   openai = "openai:gpt-6-luna", anthropic = "anthropic:claude-haiku-5-5",
@@ -376,6 +375,33 @@ for (i in seq_along(final_models)) {
   check(paste0("final_call_", m), run(make_counter(m), paste0("How many words are in: '", sentence, "'?"),
         budget(max_steps = 1, max_cost = 0.05, final_call = TRUE)),
         needs = paste0(toupper(names(final_models)[i]), "_API_KEY"), summary = loop_summary)
+}
+#     The same with a LONG structured answer after a real search: the case in
+#     which a forced call to final_answer came back empty or rejected on Groq
+#     (activities 06 and 14, November 22). Expected: stop=max_steps_final_answer
+#     and three papers, each with a DOI that the search returned.
+make_summarizer <- function(m) agent("summarizer",
+  "Search OpenAlex once, then report three of the papers found. Copy titles and DOIs exactly as the tool gives them.",
+  model = m, tools = list(tool_openalex(n = 5)),
+  output_schema = list(papers = arg_array("The papers", items = arg_object("One paper", fields = list(
+    title = arg_string("Title, as returned by the tool"), year = arg_integer("Publication year"),
+    doi = arg_string("DOI, as returned by the tool"),
+    summary = arg_string("Two sentences on what the abstract says"),
+    limits = arg_string("One limitation the abstract mentions", required = FALSE))))))
+for (m in final_models[1:2]) {
+  check(paste0("final_call_long_", m), {
+    old_opt <- options(researchAgentR.log_chars = 20000)    # keep the whole search result in the log
+    ep <- tryCatch(run(make_summarizer(m), "Find papers on exploratory graph analysis for estimating the number of dimensions.",
+                       budget(max_steps = 1, max_cost = 0.05, final_call = TRUE)),
+                   finally = options(old_opt))
+    if (!identical(ep$stop_reason, "max_steps_final_answer")) stop("stop reason: ", ep$stop_reason)
+    seen <- paste(vapply(ep$steps, function(s) paste(s$result, collapse = " "), ""), collapse = " ")
+    dois <- vapply(ep$answer$papers, function(p) as.character(p$doi), "")
+    if (!length(dois)) stop("the answer has no papers")
+    in_search <- vapply(sub("^https?://doi.org/", "", dois), grepl, logical(1), x = seen, fixed = TRUE)
+    if (!all(in_search)) stop("DOI(s) not in the search result: ", paste(dois[!in_search], collapse = ", "))
+    ep
+  }, needs = "GROQ_API_KEY", summary = function(ep) paste(ep_summary(ep), "| papers =", length(ep$answer$papers)))
 }
 # (c) Provider-side web search limited to chosen domains, through builtin_tool():
 #     Anthropic's web search tool (US$10 per 1,000 searches; max_uses caps it).

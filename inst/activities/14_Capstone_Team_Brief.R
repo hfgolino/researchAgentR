@@ -88,8 +88,9 @@ SUCCESS <- list(
 # lead's tool steps); max_steps and max_tokens count the lead's own calls.
 # final_call = TRUE: a worker that runs out of steps or tokens gets one last
 # call to hand in what it has (stop reason "max_steps_final_answer" or
-# "max_tokens_final_answer") instead of nothing. Check such answers: they are
-# forced and may be partial.
+# "max_tokens_final_answer") instead of nothing. That call has no tools: the
+# worker writes its answer from what it has found. Check such answers: they
+# may be partial.
 # max_cost counts web searches at list price (Tavily: $0.008 each), even on
 # the free plan.
 WORKER_BUDGET <- budget(max_steps = 8, max_tokens = 40000, max_cost = 0.05, max_seconds = 240,
