@@ -104,6 +104,13 @@ test_that("paired_bootstrap resamples tasks, is reproducible and leaves the RNG 
   expect_lte(b1$upper, 0.5)
   expect_equal(b1$n_tasks, 4)
   expect_output(print(b1), "3 gains, 1 same, 0 regressions")
+  # The header names each side from its own rows: both subsets of one set of
+  # results keep the attribute of the whole set.
+  both <- rbind(p$a, p$b); attr(both, "solver") <- "baseline"
+  b3 <- paired_bootstrap(both[both$solver == "baseline", ], both[both$solver == "candidate", ], R = 100)
+  expect_equal(c(b3$a_name, b3$b_name), c("baseline", "candidate"))
+  expect_output(print(b3), "candidate (b) minus baseline (a)", fixed = TRUE)
+  expect_equal(researchAgentR:::.solver_name(structure(data.frame(pass = TRUE), solver = "named")), "named")
 })
 
 test_that("the Pareto front keeps only non-dominated runs", {
@@ -126,6 +133,8 @@ test_that("plot_frontier returns a plot with the front marked", {
   expect_equal(attr(p, "summary")$pareto, c(TRUE, TRUE, TRUE, TRUE))
   p2 <- plot_frontier(hand_results(), transform(hand_results(), solver = "pricier", cost = 0.01))
   expect_equal(attr(p2, "summary")$pareto, c(TRUE, FALSE))
+  grDevices::pdf(NULL); on.exit(grDevices::dev.off())
+  expect_silent(print(p2))     # a front of one solver: no line, so no ggplot2 message
 })
 
 test_that("task_set validates input and builds from a data frame", {
@@ -219,6 +228,31 @@ test_that("the research_tasks benchmark is well formed", {
   expect_true(research_tasks$grader[[i]]("https://doi.org/10.1080/00273171.2020.1779642", task)$pass)
   expect_equal(researchAgentR:::.nih_project_numbers("Try 5R01MH000001-02 or r21ag000002."),
                c("R01MH000001", "R21AG000002"))
+})
+
+test_that("the NIH grader looks each project up by its number (the search itself is replaced here)", {
+  # The grader's logic only: which lookups it makes and how it reads the rows.
+  # The record is made up (serial 000001); the live check is in tools/live_smoke.R.
+  asked <- list()
+  record <- data.frame(project_num = "5R01MH000001-02", title = "Ecological momentary assessment of mood",
+                       abstract = "Daily surveys.", fiscal_year = 2025L, stringsAsFactors = FALSE)
+  first_form_works <- FALSE
+  testthat::local_mocked_bindings(search_nih_projects = function(..., project_nums = NULL, fiscal_years = NULL, n = 25) {
+    asked[[length(asked) + 1]] <<- list(nums = project_nums, fy = fiscal_years)
+    known <- any(grepl("R01MH000001", project_nums)) && 2025 %in% fiscal_years
+    if (!known || (!first_form_works && any(startsWith(project_nums, "*")))) record[0, ] else record
+  }, .package = "researchAgentR")
+  grade <- researchAgentR:::.grader_nih_fy(2025, "ecological momentary assessment")
+  out <- grade("The project 5R01MH000001-02 fits.", list(id = "t"))
+  expect_true(out$pass)
+  expect_equal(asked[[1]], list(nums = "*R01MH000001*", fy = 2025))        # by number, not as free text
+  expect_equal(asked[[2]]$nums, paste0(1:9, "R01MH000001*"))               # the documented form, tried second
+  first_form_works <- TRUE; asked <- list()
+  expect_true(grade("R01MH000001", list(id = "t"))$pass); expect_length(asked, 1)
+  expect_false(grade("R01MH000001 and R21AG000002", list(id = "t"))$pass)  # one number cannot be verified
+  expect_false(researchAgentR:::.grader_nih_fy(2024, "ecological momentary assessment")("R01MH000001", list(id = "t"))$pass)
+  expect_false(researchAgentR:::.grader_nih_fy(2025, "item response theory")("R01MH000001", list(id = "t"))$pass)
+  expect_false(grade("No project number here.", list(id = "t"))$pass)
 })
 
 test_that("run_eval runs a live agent on the dev DOI tasks (live)", {

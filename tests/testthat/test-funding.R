@@ -17,6 +17,10 @@ test_that("NIH criteria follow the RePORTER v2 field names", {
   extra <- .nih_criteria("x", org_names = list("UNIVERSITY OF VIRGINIA"))
   expect_equal(extra$org_names, list("UNIVERSITY OF VIRGINIA"))
   expect_length(.nih_criteria(), 0)
+  # project_nums is an array even for one number; "*" is the API's wildcard
+  expect_equal(.nih_criteria(project_nums = "*R01MH000001*")$project_nums, list("*R01MH000001*"))
+  expect_equal(as.character(.to_json(.nih_criteria(project_nums = list("5R01MH000001-02")))),
+               "{\"project_nums\":[\"5R01MH000001-02\"]}")
 })
 
 test_that("NIH searches check their inputs before any request", {
@@ -125,4 +129,59 @@ test_that("Grants.gov search and fetch work (live)", {
   d <- grants_gov_opportunity(res$id[1])
   expect_equal(nrow(d), 1)
   expect_false(is.na(d$title))
+})
+
+test_that("an NSF search of several words keeps the awards that contain every word", {
+  # NSF returns awards with ANY of the words. The API itself is replaced here
+  # (made-up awards in the documented shape) to check the two steps: ask for
+  # the rarest word, then keep the awards that contain the others.
+  award <- function(id, title, abstract) list(id = id, title = title, abstractText = abstract)
+  pool <- list(
+    award("1", "Psychometric models with machine learning", "A study of test scores."),
+    award("2", "Psychometrics of reading tests", "No learning algorithms here."),
+    award("3", "Machine learning for geology", "Rocks."),
+    award("4", "Deep learning and measurement", "Machine-scored essays; psychometric validity."))
+  asked <- character(0)
+  testthat::local_mocked_bindings(.nsf_page = function(query, size, offset) {
+    asked <<- c(asked, query$keyword)
+    hits <- Filter(function(a) grepl(tolower(query$keyword), tolower(paste(a$title, a$abstractText)), fixed = TRUE), pool)
+    total <- c(psychometric = 3, machine = 3000, learning = 9000)[[query$keyword]]
+    list(awards = if (offset > length(hits)) list() else utils::head(hits[offset:length(hits)], size), total = total)
+  })
+  res <- suppressMessages(search_nsf_awards("psychometric machine learning", n = 5))
+  expect_equal(asked[1:3], c("psychometric", "machine", "learning"))        # one count per word
+  expect_true(all(asked[-(1:3)] == "psychometric"))                         # then the rarest word only
+  expect_equal(res$id, c("1", "4"))                                         # every word, in title or abstract
+  expect_equal(attr(res, "match"), "all"); expect_equal(attr(res, "scanned"), 3)
+  expect_message(search_nsf_awards("psychometric machine learning", n = 5), "2 of the 3 awards read")
+  expect_equal(.nsf_words("theory of mind in  children"), c("theory", "mind", "children"))
+  expect_true(.has_all_words("Psychometrics and Machine Learning", c("psychometric", "machine")))
+  expect_false(.has_all_words(NA, "x"))
+})
+
+test_that("an NSF search of one word, a quoted phrase or match = 'any' is sent as it is", {
+  sent <- list()
+  testthat::local_mocked_bindings(.nsf_page = function(query, size, offset) {
+    sent[[length(sent) + 1]] <<- c(query["keyword"], size = size)
+    list(awards = list(), total = 0)
+  })
+  search_nsf_awards("psychometrics", n = 3)
+  search_nsf_awards("\"measurement invariance\"", n = 3)
+  search_nsf_awards("measurement invariance", n = 3, match = "any")
+  search_nsf_awards("measurement invariance", n = 3, match = "phrase")
+  expect_equal(vapply(sent, `[[`, "", "keyword"),
+               c("psychometrics", "\"measurement invariance\"", "measurement invariance", "\"measurement invariance\""))
+  expect_true(all(vapply(sent, `[[`, 0, "size") == 3))                      # one request each, of n awards
+})
+
+test_that("Grants.gov dates are read as yyyy-mm-dd, from either form the API gives", {
+  # Field names and formats as returned by fetchOpportunity
+  # (https://www.grants.gov/api/common/fetchopportunity): each date comes as
+  # text and, with "Str" added to the name, in a sortable form.
+  s <- list(responseDate = "Oct 15, 2026 12:00:00 AM EDT", responseDateStr = "2026-10-15-00-00-00",
+            postingDate = "May 28, 2026 12:00:00 AM EDT")
+  expect_equal(.grants_date(s, "responseDate"), "2026-10-15")
+  expect_equal(.grants_date(s, "postingDate"), "2026-05-28")          # from the text form
+  expect_true(is.na(.grants_date(s, "archiveDate")))
+  expect_true(is.na(.grants_date(list(responseDate = "to be announced"), "responseDate")))
 })

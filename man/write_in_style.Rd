@@ -26,17 +26,27 @@ write_in_style(
 }
 \value{
 The text, with attributes \code{style_distance} (a \code{\link[=style_distance]{style_distance()}}
-object), \code{cost}, \code{model} and \code{response}.
+object), \code{added} (numbers and figure or table references that are not in
+the input; empty when there are none), \code{cost}, \code{model} and \code{response}.
 }
 \description{
 One model call with the style guide and the measured targets as
 instructions. The result carries its \code{\link[=style_distance]{style_distance()}} from the style, so
 the match can be checked in numbers, not only by eye.
 }
+\details{
+A model that learned a style from a paper can also reuse that paper's
+content: its numbers, or a pointer to "Figure 3". The text is therefore
+checked in code: every number and every reference to a figure, table,
+equation, section or appendix that is not in the brief (or the draft) is
+listed in the attribute \code{added} and reported in a message. Read each one:
+it is content that the model added.
+}
 \examples{
 \dontrun{
 txt <- write_in_style("A paragraph motivating the use of network models.", my_style)
 cat(txt)
 attr(txt, "style_distance")
+attr(txt, "added")
 }
 }

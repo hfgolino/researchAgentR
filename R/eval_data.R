@@ -49,9 +49,8 @@
 
 # A live code grader for "find an NIH project of fiscal year <fy> on
 # <topic>": every project number in the answer is looked up with
-# search_nih_projects() (from the research tools module, found by name at
-# grading time) and must exist, belong to the fiscal year, and mention one
-# of `terms` in its title or abstract. The answer passes when at least one
+# search_nih_projects(project_nums = ) and must exist, belong to the fiscal
+# year, and mention one of `terms` in its title or abstract. The answer passes when at least one
 # number it gives meets all three conditions and no number it gives is
 # unverifiable.
 .grader_nih_fy <- function(fiscal_year, terms) {
@@ -79,22 +78,22 @@
 }
 
 .nih_project_matches <- function(core, fiscal_year, terms) {
-  search <- get("search_nih_projects", mode = "function")
-  formal <- names(formals(search))
-  # Ask by project number when the search function supports it; otherwise
-  # pass the number as the query text.
-  by_number <- intersect(c("project_nums", "project_numbers", "project_number"), formal)
-  args <- if (length(by_number)) stats::setNames(list(core), by_number[1]) else list(core)
-  fy_arg <- intersect(c("fiscal_years", "fiscal_year"), formal)
-  if (length(fy_arg)) args[[fy_arg[1]]] <- fiscal_year
-  res <- do.call(search, args)
-  if (!is.data.frame(res) || !nrow(res)) return(FALSE)
-  num_col <- intersect(c("project_num", "core_project_num", "project_number", "id"), names(res))
-  year_col <- intersect(c("fiscal_year", "year"), names(res))
-  if (!length(num_col) || !length(year_col)) .stop("search_nih_projects() returned no project number or year column.")
-  text <- paste(res$title %||% "", res$abstract %||% "")
-  hit <- grepl(core, toupper(res[[num_col[1]]]), fixed = TRUE) &
-    as.integer(res[[year_col[1]]]) %in% fiscal_year &
+  # RePORTER writes a project number as type digit + core number + support
+  # year (5R01MH123456-03) and has one record per fiscal year. The core
+  # number is looked up with "*" (any characters) on both sides; if that
+  # form finds nothing, with the nine possible type digits in front, which is
+  # the form shown in the API documentation (https://api.reporter.nih.gov/).
+  lookup <- function(patterns) {
+    tryCatch(search_nih_projects(project_nums = patterns, fiscal_years = fiscal_year, n = 50),
+             error = function(e) e)
+  }
+  res <- lookup(paste0("*", core, "*"))
+  if (inherits(res, "error") || !nrow(res)) res <- lookup(paste0(1:9, core, "*"))
+  if (inherits(res, "error")) .stop("NIH RePORTER could not be asked about ", core, ": ", conditionMessage(res))
+  if (!nrow(res)) return(FALSE)
+  text <- paste(res$title, res$abstract)
+  hit <- grepl(core, toupper(res$project_num), fixed = TRUE) &
+    res$fiscal_year %in% fiscal_year &
     Reduce(`|`, lapply(terms, function(t) grepl(t, text, ignore.case = TRUE)))
   any(hit, na.rm = TRUE)
 }

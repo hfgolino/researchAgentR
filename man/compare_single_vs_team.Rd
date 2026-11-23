@@ -17,7 +17,10 @@ compare_single_vs_team(single, team, tasks, budget = researchAgentR::budget())
 }
 \value{
 The rows of \code{\link[=episodes_df]{episodes_df()}} for both arms, with a column \code{arm}
-(\code{"single"} or \code{"team"}); the episodes are in \code{attr(x, "episodes")}.
+(\code{"single"} or \code{"team"}) and two more token columns: \code{tokens} counts the
+calls of the agent itself (for a team, the lead), \code{worker_tokens} the
+calls of the workers it started, and \code{total_tokens} is their sum. The
+episodes are in \code{attr(x, "episodes")}.
 }
 \description{
 The fair comparison for a multi-agent design: the same tasks, the same
@@ -26,9 +29,14 @@ workers (each worker call is a tool step whose cost is the sub-episode
 cost), so \code{max_cost} caps the whole team. Step and token limits apply to
 the lead's own calls. Grade the answers with the evaluation harness.
 }
+\details{
+A task that is given more than once counts as that many independent
+trials: each run has its own place in the response cache (as in
+\code{\link[=run_eval]{run_eval()}}), so the second run is not a replay of the first.
+}
 \examples{
 \dontrun{
 cmp <- compare_single_vs_team(solo, lead, tasks, budget(max_cost = 0.02))
-aggregate(cost ~ arm, cmp, mean)
+aggregate(cbind(cost, total_tokens) ~ arm, cmp, mean)
 }
 }

@@ -339,13 +339,20 @@ nih[, c("project_num", "fiscal_year", "agency", "award_amount", "title")]
 # Recorded run (November 22, 2026): total 58; 10 rows, all of fiscal year
 # 2025, from NIMH, NIA, NIDCD and NIAAA.
 
+# NSF's search returns the awards that contain ANY of the words, in no order
+# of relevance: sent as they are, these three words matched 10,000 awards in
+# the first run of this activity, and the first ten had nothing to do with
+# psychometrics. search_nsf_awards() therefore asks NSF for the rarest of the
+# words and keeps the awards whose title or abstract contains all of them.
 nsf <- search_nsf_awards("psychometrics machine learning", n = 10, date_start = "2024-01-01")
-attr(nsf, "total")
+attributes(nsf)[c("total", "scanned", "match")]
 nsf[, c("id", "start_date", "amount", "title")]
-# EXPECTED OUTPUT: up to 10 NSF awards that started on or after 2024-01-01,
-# with award id, start date, funds obligated and title.
-# Recorded run (November 22, 2026): total 10000; the 10 rows had start dates
-# from 03/01/2027 to 04/01/2027.
+# EXPECTED OUTPUT: when fewer than 10 awards qualify, a message with the
+# number of awards read and kept; `total` (awards NSF has for the rarest
+# word since 2024), `scanned` (how many of them were read, at most 100
+# here) and match "all"; then up to 10 awards with award id, start date,
+# funds obligated and title. Few rows, or none, is an honest result: check
+# the titles, and try match = "any" to see what NSF returns by itself.
 
 grants <- search_grants_gov("mental health measurement", n = 10)
 attr(grants, "total")
@@ -358,13 +365,15 @@ grants[, c("id", "number", "agency_code", "close_date", "title")]
 # The full synopsis of the first one (eligibility, award size, description):
 if (nrow(grants)) {
   opp <- grants_gov_opportunity(grants$id[1])
-  print(opp[, c("number", "agency", "posting_date", "response_date", "award_floor", "award_ceiling")])
+  print(opp[, c("number", "agency", "posting_date", "response_date", "estimated",
+                "award_floor", "award_ceiling")])
   cat(substr(opp$description, 1, 800), "\n")
 }
 # EXPECTED OUTPUT: a one-row data frame and the first 800 characters of the
-# synopsis in plain text.
-# Recorded run (November 22, 2026): PAR-28-091, National Institutes of
-# Health, response_date NA, award_floor NA, award_ceiling 5e+05.
+# synopsis in plain text. response_date is the closing date (yyyy-mm-dd);
+# `estimated` is TRUE for a forecasted opportunity, whose dates are the
+# agency's estimates. Many NIH opportunities give no award floor or ceiling
+# (NA): the amounts are in the full announcement.
 
 
 # ==============================================================================

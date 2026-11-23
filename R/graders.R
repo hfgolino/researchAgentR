@@ -30,7 +30,7 @@
 # Normalization for exact matching: case, spacing, surrounding quotes and a
 # final period do not change the meaning of a short answer.
 .normalize_text <- function(x) {
-  x <- tolower(trimws(gsub("\\s+", " ", x)))
+  x <- tolower(trimws(gsub("\\s+", " ", plain_punctuation(as.character(x)))))
   x <- gsub("^[\"'`]+|[\"'`]+$", "", x)
   trimws(sub("[.]$", "", x))
 }
@@ -91,8 +91,19 @@ hash_answer <- function(x, type = c("text", "doi")) {
 .is_hashed <- function(x) length(x) > 0 && is.character(x) && all(startsWith(x, "md5:"))
 
 # Put a grader in its class, with a label recorded in every evaluation row.
+# Every grader sees the answer with plain punctuation: models write narrow
+# and non-breaking spaces, curly quotes and non-breaking hyphens, and a
+# pattern such as "p = .03" would not match them. Typography is not content.
 .grader <- function(fn, label, ...) {
-  structure(fn, class = c("grader", "function"), label = label, ...)
+  force(fn)
+  graded <- function(answer, task) fn(.plain_answer(answer), task)
+  structure(graded, class = c("grader", "function"), label = label, ...)
+}
+
+.plain_answer <- function(answer) {
+  if (is.character(answer)) return(plain_punctuation(answer))
+  if (is.list(answer)) return(rapply(answer, plain_punctuation, classes = "character", how = "replace"))
+  answer
 }
 
 #' @export

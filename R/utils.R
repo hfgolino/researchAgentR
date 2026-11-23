@@ -144,7 +144,8 @@ save_table <- function(x, file, plain_punctuation = TRUE) {
   x <- as.data.frame(x, stringsAsFactors = FALSE)
   for (j in seq_along(x)) {
     if (is.list(x[[j]])) x[[j]] <- vapply(x[[j]], function(v) paste(unlist(v), collapse = "; "), character(1))
-    if (is.character(x[[j]]) && plain_punctuation) x[[j]] <- .plain_punctuation(x[[j]])
+    # (a call finds the function plain_punctuation(), not the argument of the same name)
+    if (is.character(x[[j]]) && plain_punctuation) x[[j]] <- plain_punctuation(x[[j]])
   }
   # The CSV text is built here rather than with write.csv(), which converts
   # text to the system's encoding first (and loses characters where that is
@@ -165,14 +166,39 @@ save_table <- function(x, file, plain_punctuation = TRUE) {
   invisible(file)
 }
 
-.plain_punctuation <- function(x) {
+#' Replace typographic punctuation with plain characters
+#'
+#' Models and word processors write characters that look like ordinary
+#' punctuation but are other characters: narrow and non-breaking spaces,
+#' non-breaking hyphens, dashes, curly quotes. A comparison such as
+#' `grepl("p = .03", text)` then fails for a text that reads `p = .03` on
+#' the screen. This function replaces them with the plain characters of the
+#' keyboard and removes the invisible ones (zero-width spaces, soft hyphens).
+#' Letters with accents and symbols such as the greater-or-equal sign are
+#' kept.
+#'
+#' The graders ([grader_code()] and relatives), [check_claims()] and the
+#' quotation checks of the writing tools do this before they compare texts,
+#' and [save_table()] before it writes a file.
+#'
+#' @param x A character vector (anything else is returned unchanged).
+#' @return `x` with plain hyphens, quotes, spaces and three dots for an
+#'   ellipsis.
+#' @examples
+#' x <- "p\u202f=\u202f.03 on a five\u2011point scale"
+#' grepl("p = .03", x, fixed = TRUE)                       # FALSE: narrow no-break spaces
+#' grepl("p = .03", plain_punctuation(x), fixed = TRUE)    # TRUE
+#' @export
+plain_punctuation <- function(x) {
+  if (!is.character(x)) return(x)
   # patterns built from code points, so they work in any locale
   u <- function(...) paste0("[", intToUtf8(c(...), multiple = FALSE), "]")
   x <- enc2utf8(x)
-  x <- gsub(u(0x2010:0x2015, 0x2212), "-", x, perl = TRUE)
-  x <- gsub(u(0x2018, 0x2019, 0x201A, 0x2032), "'", x, perl = TRUE)
-  x <- gsub(u(0x201C, 0x201D, 0x201E, 0x2033), "\"", x, perl = TRUE)
-  x <- gsub(u(0x00A0, 0x2007, 0x2009, 0x202F), " ", x, perl = TRUE)
+  x <- gsub(u(0x2010:0x2015, 0x2212), "-", x, perl = TRUE)                    # hyphens, dashes, minus sign
+  x <- gsub(u(0x2018:0x201B, 0x2032), "'", x, perl = TRUE)                    # single quotes, prime
+  x <- gsub(u(0x201C:0x201F, 0x2033), "\"", x, perl = TRUE)                   # double quotes, double prime
+  x <- gsub(u(0x00A0, 0x1680, 0x2000:0x200A, 0x202F, 0x205F, 0x3000), " ", x, perl = TRUE)   # spaces of other widths
+  x <- gsub(u(0x00AD, 0x200B:0x200D, 0x2060, 0xFEFF), "", x, perl = TRUE)     # invisible characters
   gsub(intToUtf8(0x2026), "...", x, fixed = TRUE)
 }
 

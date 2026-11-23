@@ -28,9 +28,12 @@ A list of episodes (one per task, in order) with class \code{fan_out}.
 A run that failed with an R error is kept as an episode with no steps and
 stop reason \code{"error: ..."}, and is counted in the summary. \code{summary(x)}
 (also \code{attr(x, "summary")}) gives one row per task: \code{task},
-\code{stop_reason}, \code{model_calls}, \code{tokens}, \code{cost}, \code{seconds}; its
-attributes give \code{total_cost}, \code{summed_seconds}, \code{wall_seconds} and
-\code{failures}.
+\code{stop_reason}, \code{answered} (did the run end with an answer?),
+\code{model_calls}, \code{tokens}, \code{cost}, \code{seconds}; its attributes give
+\code{total_cost}, \code{summed_seconds}, \code{wall_seconds}, \code{answered} (runs with an
+answer) and \code{failures} (runs that ended with an R error). A run can end
+without an error and without an answer (a step or tool-error limit):
+read \code{stop_reason}.
 }
 \description{
 For decomposable, read-only subtasks (for example "summarize the abstract
@@ -42,6 +45,11 @@ money: the summed cost is the same, and parallel calls reach free-tier
 rate limits sooner.
 }
 \details{
+A background process starts with an empty workspace. The objects of the
+workspace that the agent's tools use (a data frame a tool reads, a helper
+function it calls) are copied to it, and the packages attached in the
+session are attached there too, so a tool that works in \code{\link[=run]{run()}} works here.
+
 Only use it for read-only tasks: parallel workers that write files or
 send messages can conflict.
 }

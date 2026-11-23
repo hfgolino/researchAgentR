@@ -81,6 +81,72 @@ test_that("fan_out summary: per-task rows, totals, failures and wall-clock time"
   x <- structure(eps, class = "fan_out", summary = s)
   expect_identical(summary(x), s)
   expect_output(print(x), "summed time 5.0 s \\| wall-clock 2.5 s")
+  # A run that hit a limit has no R error and no answer: it is not "0 failed".
+  no_answer <- .fake_episode("t4", list(.model_step(50, 5, 0.0004)), 1, stop_reason = "max_steps")
+  no_answer["answer"] <- list(NULL)
+  s2 <- .fan_out_summary(c(eps, list(no_answer)), wall_seconds = 3)
+  expect_equal(s2$answered, c(TRUE, TRUE, FALSE, FALSE))
+  expect_equal(c(attr(s2, "answered"), attr(s2, "failures")), c(2, 1))
+  expect_output(print(structure(c(eps, list(no_answer)), class = "fan_out", summary = s2)),
+                "4 tasks: 2 with an answer, 2 without (1 stopped by an R error)", fixed = TRUE)
+})
+
+# A tool as a student writes it: a function of the workspace that reads a
+# data frame of the workspace through a helper function of the workspace.
+.workspace_reviewer <- function() {
+  # Evaluated IN the workspace, as the lines of a script are: the functions
+  # then belong to it (a function made in this file would belong to the tests).
+  eval(quote({
+    ra_test_docs <- data.frame(section = "Abstract", text = "Hello", stringsAsFactors = FALSE)
+    ra_test_helper <- function(s) ra_test_docs$text[ra_test_docs$section == s]
+    ra_test_unused <- 1
+    ra_test_default <- "none"
+    ra_test_read_section <- function(section, fallback = ra_test_default) ra_test_helper(section)
+  }), globalenv())
+  tool <- define_tool(get("ra_test_read_section", envir = globalenv()), "Return one section.",
+                      name = "read_section", args = list(section = arg_string("The section title")))
+  agent("reviewer", "Review one section.", model = "groq:openai/gpt-oss-20b", tools = list(tool),
+        description = "Reviews one section.")
+}
+.workspace_cleanup <- function() {
+  rm(list = intersect(c("ra_test_docs", "ra_test_helper", "ra_test_unused", "ra_test_default",
+                        "ra_test_read_section"), ls(globalenv())), envir = globalenv())
+}
+
+test_that("the workspace objects that an agent's tools use are found", {
+  a <- .workspace_reviewer(); on.exit(.workspace_cleanup())
+  used <- c("ra_test_helper", "ra_test_docs", "ra_test_default")   # the helper, what it reads, a default value
+  expect_setequal(names(.workspace_objects(.tool_functions(a))), used)
+  lead <- agent("lead", "Lead.", model = "groq:openai/gpt-oss-20b", tools = list(as_tool(a)))
+  expect_setequal(names(.workspace_objects(.tool_functions(lead))), used)         # through an agent used as a tool
+  expect_length(.workspace_objects(list(paste, sum, run, tool_openalex()$fn)), 0)  # package functions: nothing to copy
+  expect_true(.sees_workspace(a$tools[[1]]$fn)); expect_false(.sees_workspace(run))
+  nested <- local({ k <- 1; function(x) ra_test_docs$text[k] }, envir = new.env(parent = globalenv()))   # a function made by another
+  expect_equal(names(.workspace_objects(list(nested))), "ra_test_docs")
+  s <- .background_settings(a)
+  expect_setequal(names(s$workspace), used)
+  expect_true("researchAgentR" %in% s$packages)
+})
+
+test_that("a tool that reads the workspace works in a background process", {
+  skip_on_cran()
+  skip_if_not_installed("mirai")
+  a <- .workspace_reviewer(); on.exit(.workspace_cleanup())
+  settings <- .background_settings(a)
+  mirai::daemons(1); on.exit(mirai::daemons(0), add = TRUE)
+  job <- mirai::mirai({
+    ns <- asNamespace("researchAgentR")
+    if (exists(".background_setup", ns)) {
+      ns$.background_setup(settings)
+      researchAgentR::call_tool("read_section", agent$tools, list(section = "Abstract"))$output
+    } else "another version"
+  }, agent = a, settings = settings)
+  out <- mirai::call_mirai(job)$data
+  # The background process loads the INSTALLED package (R CMD check installs this version).
+  skip_if(inherits(out, "miraiError") || identical(out, "another version"),
+          "the installed researchAgentR is not the version under test")
+  expect_match(out, "Hello", fixed = TRUE)          # the tool found the data frame of the workspace
+  expect_false(grepl("not found", out, fixed = TRUE))
 })
 
 test_that("as_tool() wraps an agent as a one-argument tool", {

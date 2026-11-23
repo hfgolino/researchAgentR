@@ -189,16 +189,18 @@ abline(0, 1 / nrow(sample_df), lty = 2)     # random order, on average
 # the dashed diagonal when the ranking helps. A ranking is not a decision:
 # every record is still screened below.
 # Recorded run (November 22, 2026): the top record (index 60) scored 0.8910;
-# of 60 records, 28 were read for 95% recall, against 57 expected in random
-# order.
+# of 60 records, 28 were read for 95% recall (19 of the 20 human includes),
+# against 57 expected in random order.
 
 
 # ==============================================================================
 # STEP 3: ROUTE EACH RECORD TO A SCREENING PATH (route)
 # ==============================================================================
 
-# Titles that are clearly off topic go to ONE screener (cheaper); everything
-# else, and every record the router cannot place, goes to TWO.
+# Titles that are clearly off topic go to ONE screener; everything else, and
+# every record the router cannot place, goes to TWO. A router only pays when
+# it costs less than the second screening it avoids: the cost table at the
+# end of the activity answers that question for this run.
 ROUTES <- c(
   needs_screening = paste("On or near the topic of this review, or impossible to judge",
                           "from the title alone. Review topic:", REVIEW_TOPIC),
@@ -454,10 +456,14 @@ costs <- c(router = sum(routed$cost, na.rm = TRUE),
            adjudicator = if (length(adj_eps)) sum(episodes_df(adj_eps)$cost) else 0)
 round(c(costs, total = sum(costs), per_record = sum(costs) / nrow(sample_df)), 5)
 # EXPECTED OUTPUT: the cost of each stage, the total and the cost per record
-# screened, in US dollars at list price.
+# screened, in US dollars at list price. Compare the router with what it
+# saved: the second screening of the records it sent to one screener only.
 # Recorded run (November 22, 2026): router 0.00528, screener_a 0.00873,
 # screener_b 0.00156 (Jev), adjudicator 0.00112, total 0.01669, per_record
-# 0.00028.
+# 0.00028. With Jev as screener B the router did NOT pay: it cost more
+# (0.00528) than Jev cost for all the records it screened (0.00156). A
+# router earns its cost when the second screener is a model, not when the
+# second screener is cheaper than the router.
 
 saveRDS(list(final = final, screener_a = screen_a, screener_b = screen_b,
              adjudicated = adjudicated, costs = costs, criteria = INCLUSION_CRITERIA,

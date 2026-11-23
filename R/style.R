@@ -17,13 +17,11 @@
   get0(name, envir = environment(.lazy_fn), mode = "function", inherits = TRUE)
 }
 
-# Collapse runs of whitespace and unify typographic quotes and apostrophes,
-# so a quotation copied by a model can be compared with the source.
+# Plain punctuation and single spaces, so a quotation copied by a model can
+# be compared with the source: models change curly quotes, non-breaking
+# hyphens and narrow spaces when they copy, and the words stay the same.
 .norm_text <- function(x) {
-  x <- gsub("[\u2018\u2019\u201B\u2032]", "'", x)
-  x <- gsub("[\u201C\u201D\u201F\u2033]", "\"", x)
-  x <- gsub("\u00A0", " ", x, fixed = TRUE)
-  trimws(gsub("\\s+", " ", x))
+  trimws(gsub("\\s+", " ", plain_punctuation(as.character(x))))
 }
 
 # Read documents as paragraphs: the context module's read_documents() when it
@@ -511,6 +509,22 @@ print.style_distance <- function(x, ...) {
   TRUE
 }
 
+# Check the double-quoted spans of a style guide against the source texts and
+# remove those that are not there. A model also puts the names of the
+# measures it was given in quotes ("we/our/us"): a span that is not in the
+# source but is in `given` (the measured numbers of the prompt) is such a
+# label. It is left in place and is not counted as a quotation.
+.verify_guide_quotes <- function(guide, source, given = "") {
+  source_norm <- .norm_text(paste(source, collapse = " "))
+  quotes <- .extract_quotes(guide)
+  found <- vapply(quotes, .quote_found, logical(1), source_norm = source_norm, USE.NAMES = FALSE)
+  label <- !found & vapply(tolower(quotes), .quote_found, logical(1),
+                           source_norm = tolower(.norm_text(given)), USE.NAMES = FALSE)
+  quotes <- quotes[!label]
+  found <- found[!label]
+  list(guide = .remove_quotes(guide, quotes[!found]), quotes = quotes, found = found)
+}
+
 # Replace unverified quotations (with straight or typographic quotes) by a
 # visible marker, so a reader sees that something was removed.
 .remove_quotes <- function(text, quotes) {
@@ -595,10 +609,10 @@ learn_style <- function(path, model = default_model("lead"), n_exemplars = 8, au
 
   # Verify every quotation against the source paragraphs (all of them, not
   # only the exemplars: a real sentence from elsewhere is still verbatim).
-  source_norm <- .norm_text(paste(docs$text, collapse = " "))
-  quotes <- .extract_quotes(guide)
-  found <- vapply(quotes, .quote_found, logical(1), source_norm = source_norm, USE.NAMES = FALSE)
-  guide <- .remove_quotes(guide, quotes[!found])
+  checked <- .verify_guide_quotes(guide, docs$text, given = numbers)
+  guide <- checked$guide
+  quotes <- checked$quotes
+  found <- checked$found
   if (any(!found)) .msg(sum(!found), " of ", length(quotes), " quotations were not found in the source and were removed.")
 
   structure(list(
@@ -661,7 +675,7 @@ style_to_skill <- function(style, name, dir = ".", overwrite = FALSE) {
     paste("#", "Writing in the style of", who), "",
     "Follow the guide below when drafting or revising. Keep every claim, number and",
     "citation of a draft; never invent citations. Mark a needed citation as [CITATION NEEDED].",
-    "For examples of real paragraphs, read references/exemplars.md.", "",
+    "For examples of real paragraphs, read [references/exemplars.md](references/exemplars.md).", "",
     "## Measured targets", "", targets, "", "## Style guide", "",
     # Demote the guide's headings one level so they sit under this section.
     sub("^(#+)", "\\1#", strsplit(style$guide, "\n")[[1]]))
@@ -682,6 +696,13 @@ style_to_skill <- function(style, name, dir = ".", overwrite = FALSE) {
 #' instructions. The result carries its [style_distance()] from the style, so
 #' the match can be checked in numbers, not only by eye.
 #'
+#' A model that learned a style from a paper can also reuse that paper's
+#' content: its numbers, or a pointer to "Figure 3". The text is therefore
+#' checked in code: every number and every reference to a figure, table,
+#' equation, section or appendix that is not in the brief (or the draft) is
+#' listed in the attribute `added` and reported in a message. Read each one:
+#' it is content that the model added.
+#'
 #' @param brief_or_draft In `"draft"` mode, a brief (what to write); in
 #'   `"rewrite"` mode, the text to rewrite.
 #' @param style A `writing_style` from [learn_style()].
@@ -689,12 +710,14 @@ style_to_skill <- function(style, name, dir = ".", overwrite = FALSE) {
 #' @param mode `"draft"` or `"rewrite"`.
 #' @param max_tokens Maximum output tokens.
 #' @return The text, with attributes `style_distance` (a [style_distance()]
-#'   object), `cost`, `model` and `response`.
+#'   object), `added` (numbers and figure or table references that are not in
+#'   the input; empty when there are none), `cost`, `model` and `response`.
 #' @examples
 #' \dontrun{
 #' txt <- write_in_style("A paragraph motivating the use of network models.", my_style)
 #' cat(txt)
 #' attr(txt, "style_distance")
+#' attr(txt, "added")
 #' }
 #' @export
 write_in_style <- function(brief_or_draft, style, model = default_model("lead"),
@@ -707,7 +730,10 @@ write_in_style <- function(brief_or_draft, style, model = default_model("lead"),
     style$guide, "\n\nMeasured targets: mean sentence length about ", round(p$sentence_mean),
     " words; about ", round(p$words_per_paragraph), " words per paragraph; ",
     round(p$we_per_1k, 1), " uses of we/our/us and ", round(p$em_dash_per_1k, 1),
-    " em dashes per 1,000 words.\n\nNever invent citations, data or numbers. ",
+    " em dashes per 1,000 words.\n\nThe guide and its quotations show HOW the author writes, ",
+    "not WHAT to write: never reuse their facts, numbers, results or examples. Use only the ",
+    "content of the user's message. Never invent citations, data or numbers, and never refer ",
+    "to a figure, table, equation, section or appendix that the user's message does not name. ",
     "Where a claim needs a source, write [CITATION NEEDED]. Return only the text.")
   user <- if (mode == "draft") {
     paste0("Write the text described in this brief:\n\n", brief_or_draft)
@@ -718,6 +744,29 @@ write_in_style <- function(brief_or_draft, style, model = default_model("lead"),
   r <- chat(user, model = model, system = system, max_tokens = max_tokens)
   text <- r$content %||% ""
   if (!nzchar(text)) .stop("The model returned no text (stop reason: ", r$stop_reason, ").")
-  structure(text, style_distance = style_distance(text, style), cost = r$cost,
+  added <- .added_content(text, brief_or_draft)
+  if (length(added)) {
+    .msg("write_in_style(): not in the ", if (mode == "draft") "brief" else "draft",
+         ", so added by the model (check each one): ", paste(added, collapse = ", "), ".")
+  }
+  structure(text, style_distance = style_distance(text, style), added = added, cost = r$cost,
             model = r$model, response = r)
+}
+
+# Numbers, and references to figures, tables, equations, sections and
+# appendices, that are in `text` but not in `given`. Numbers are compared by
+# value (".50" and "0.5" are the same number, "1,000" is one number).
+.added_content <- function(text, given) {
+  pick <- function(x, pattern) regmatches(x, gregexpr(pattern, x, perl = TRUE))[[1]]
+  clean <- function(x) gsub("(?<=[0-9]),(?=[0-9]{3}(?![0-9]))", "", plain_punctuation(paste(x, collapse = " ")), perl = TRUE)
+  text <- clean(text)
+  given <- clean(given)
+  ref <- "(?i)\\b(?:figure|fig\\.|table|equation|eq\\.|appendix|section)\\s+[0-9]+[A-Za-z]?\\b|(?i)\\bappendix\\s+[A-Z]\\b"
+  refs <- unique(pick(text, ref))
+  new_refs <- refs[!tolower(refs) %in% tolower(pick(given, ref))]
+  num <- "(?<![A-Za-z0-9.])(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)(?![0-9A-Za-z])"
+  # the number of a reference ("Figure 3") is reported with it, not again alone
+  numbers <- unique(pick(gsub(ref, " ", text, perl = TRUE), num))
+  new_numbers <- numbers[!as.numeric(numbers) %in% as.numeric(pick(given, num))]
+  c(new_refs, new_numbers)
 }

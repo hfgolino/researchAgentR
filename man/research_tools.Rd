@@ -29,7 +29,8 @@ tool_get_work()
 tool_snowball(n = 20)
 }
 \arguments{
-\item{n}{Default number of records (the model may ask for up to 50).}
+\item{n}{The number of records a call returns, and the most the model
+can ask for (it may ask for fewer). Every record costs tokens.}
 
 \item{filter}{Optional extra OpenAlex filter string (see Details).}
 
@@ -48,7 +49,7 @@ Each function returns a tool (see \code{\link[=define_tool]{define_tool()}}) tha
 call. The model sees a compact list (title, year, authors, source, DOI,
 open-access link and the first 60 words of the abstract); the complete
 data frame is kept as the tool's R value. The arguments of these functions
-set the defaults the model starts from.
+are the researcher's settings: the model works within them.
 }
 \details{
 \itemize{

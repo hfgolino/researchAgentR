@@ -889,8 +889,10 @@ find_open_access <- function(doi) {
 #'
 #' @param df A data frame with at least `title`, `year`, `doi` and
 #'   `database`, for example `rbind()` of several search results.
-#' @return The deduplicated data frame with a new column `n_found` (how many
-#'   records were merged into each row). The attribute `dedup` is a data
+#' @return The deduplicated data frame with two new columns: `n_databases`
+#'   (how many different databases found the record) and `n_found` (how many
+#'   records were merged into the row, which is larger when one database
+#'   returned several versions of a work). The attribute `dedup` is a data
 #'   frame with the counts: records in, duplicates removed by DOI, by title
 #'   and year, and records out.
 #' @examples
@@ -911,6 +913,7 @@ dedupe_records <- function(df) {
   }
   n <- nrow(df)
   if (n == 0) {
+    df$n_databases <- integer(0)
     df$n_found <- integer(0)
     attr(df, "dedup") <- data.frame(stage = c("records_in", "duplicates_doi", "duplicates_title_year", "records_out"),
                                     n = 0L, stringsAsFactors = FALSE)
@@ -948,9 +951,12 @@ dedupe_records <- function(df) {
       if (length(vals)) out[[col]][k] <- vals[1]
     }
   }
-  out$database <- vapply(g_all[keep_rows], function(g) {
-    paste(unique(df$database[g_all == g]), collapse = "; ")
-  }, character(1))
+  # (a table that was deduplicated before lists several databases in one cell)
+  found_by <- lapply(g_all[keep_rows], function(g) {
+    unique(unlist(strsplit(as.character(df$database[g_all == g]), "; ", fixed = TRUE)))
+  })
+  out$database <- vapply(found_by, paste, character(1), collapse = "; ")
+  out$n_databases <- lengths(found_by)
   out$n_found <- as.integer(table(g_all)[as.character(g_all[keep_rows])])
   rownames(out) <- NULL
   n_doi <- n - length(unique(g_doi))
@@ -1066,11 +1072,18 @@ print.lit_records <- function(x, ...) {
 .lit_tool_args <- function(n_default) {
   list(
     query = arg_string("Search terms: the key concepts of the topic, for example 'loneliness intervention older adults randomized'. Short keyword queries work better than sentences."),
-    n = arg_integer(paste0("How many records to return (default ", n_default, ", at most 50)."), required = FALSE)
+    n = arg_integer(paste0("How many records to return (default and at most ", n_default,
+                           "; ask for fewer when a few are enough)."), required = FALSE)
   )
 }
 
-.lit_n <- function(n, default) min(50L, as.integer(n %||% default))
+# How many records a tool call returns. The researcher's `n` is the limit:
+# the model may ask for fewer, never for more (each record costs tokens).
+.lit_n <- function(n, limit) {
+  n <- suppressWarnings(as.integer(n %||% limit))
+  if (length(n) != 1 || is.na(n)) n <- as.integer(limit)
+  max(1L, min(as.integer(limit), n))
+}
 
 #' Research search tools for agents
 #'
@@ -1078,7 +1091,7 @@ print.lit_records <- function(x, ...) {
 #' call. The model sees a compact list (title, year, authors, source, DOI,
 #' open-access link and the first 60 words of the abstract); the complete
 #' data frame is kept as the tool's R value. The arguments of these functions
-#' set the defaults the model starts from.
+#' are the researcher's settings: the model works within them.
 #'
 #' * `tool_openalex()`: [search_openalex()]; the model may also set years.
 #' * `tool_crossref()`: [search_crossref()].
@@ -1092,7 +1105,8 @@ print.lit_records <- function(x, ...) {
 #' * `tool_snowball()`: [get_references()] and [get_citations()].
 #'
 #' @inheritParams search_openalex
-#' @param n Default number of records (the model may ask for up to 50).
+#' @param n The number of records a call returns, and the most the model
+#'   can ask for (it may ask for fewer). Every record costs tokens.
 #' @return An object of class `agent_tool`.
 #' @examples
 #' tool_openalex()
@@ -1226,6 +1240,6 @@ tool_snowball <- function(n = 20) {
     args = list(
       work = arg_string("DOI or OpenAlex ID (W123...) of the starting paper."),
       direction = arg_enum("Which way to follow citations.", c("references", "citations")),
-      n = arg_integer(paste0("How many works to return (default ", n, ", at most 50)."),
+      n = arg_integer(paste0("How many works to return (default and at most ", n, ")."),
                       required = FALSE)))
 }

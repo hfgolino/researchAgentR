@@ -113,6 +113,21 @@ test_that("recommendations and scripts are reported without failing validity", {
   expect_false(rule_ok(chk, "paths use forward slashes"))
   expect_true(is.na(rule_ok(chk, "bundled scripts reviewed by a person")))
   expect_equal(attr(chk, "scripts"), "scripts/fix.R")
+  expect_true(rule_ok(chk, "bundled reference files are named in the body"))
+  # A file that SKILL.md never names is never loaded by an agent.
+  writeLines("An orphan.", file.path(d, "references", "orphan.md"))
+  chk2 <- validate_skill(d)
+  expect_false(rule_ok(chk2, "bundled reference files are named in the body"))
+  expect_match(chk2$detail[chk2$rule == "bundled reference files are named in the body"], "references/orphan.md")
+})
+
+test_that("file paths in a skill body are found as links, in backticks and as plain text", {
+  body <- c("Read [the guide](references/guide.md) and `references/rules.md`.",
+            "For examples of real paragraphs, read references/exemplars.md.",
+            "Run scripts/check.R, see https://example.org/references/x.md and [top](#top).")
+  expect_setequal(.local_links(body), c("references/guide.md", "references/rules.md",
+                                        "references/exemplars.md", "scripts/check.R"))
+  expect_length(.local_links("No files here; preferences/are.not paths."), 0)
 })
 
 test_that("skills written by the package round-trip and are never silently overwritten", {

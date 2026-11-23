@@ -1,3 +1,87 @@
+# researchAgentR 0.1.4 (November 22, 2026, late night)
+
+The open issues from reading the transcripts of the first full live run.
+None of these changes has run live yet; the checks marked (live check) are
+in `tools/live_smoke.R`.
+
+## Evaluation
+
+* **The NIH benchmark tasks can pass.** The grader searched the project
+  number as free text and found nothing, so success in activities 09, 10 and
+  11 was capped at 0.75. It now looks the project up by its number:
+  `search_nih_projects()` has a `project_nums` argument, where `*` stands for
+  any characters (live check: a project returned by a search must pass, a
+  number that does not exist must not).
+* **Graders see plain punctuation.** Models write narrow and non-breaking
+  spaces, curly quotes and non-breaking hyphens; a grader pattern such as
+  `d = 0.71` did not match them (activity 16: every answer failed), and a DOI
+  written with non-breaking hyphens was not recognized. Every grader now
+  replaces typographic punctuation in the answer first. The new
+  `plain_punctuation()` does the same for a comparison of one's own;
+  `check_claims()`, the review tools and `learn_style()` use it for their
+  quotation checks, so a quotation is no longer "not found" because of a
+  hyphen. `research_tasks` was rebuilt with these graders.
+* `paired_bootstrap()` names the two solvers from their own rows (the header
+  named one solver twice after subsetting a set of results).
+* `compare_single_vs_team()`: a task given twice is two independent trials
+  (the second was replayed from the cache at cost 0); new columns
+  `worker_tokens` and `total_tokens` (the team's `tokens` counted the lead
+  only).
+* `plot_frontier()`: no ggplot2 message for a front of one solver.
+
+## Agents and tools
+
+* `fan_out()` in background processes: the workspace objects that the tools
+  use (a data frame a tool reads, a helper it calls) are copied to the
+  background processes, and the attached packages are attached there. In
+  activity 08, 7 of 8 workers had failed because the tool could not find
+  `docs`. The summary line counts runs with and without an answer (it said
+  "0 failed" for runs that stopped without one).
+* Literature search tools: the researcher's `n` is the limit of a call. The
+  model may ask for fewer records, no longer for up to 50.
+* `search_nsf_awards()`: NSF returns awards that contain ANY of several
+  words, in no order of relevance (10,000 awards for three words, the first
+  ten unrelated). With the new `match = "all"` (the default) the function
+  asks NSF for the rarest word and keeps the awards that contain every word
+  (live check). `match = "any"` and `"phrase"` send the words as before or in
+  quotes.
+* `grants_gov_opportunity()`: the closing date was read from a remark field
+  that is usually empty. Dates now come from the date fields, as
+  `yyyy-mm-dd`; a forecasted opportunity gives the agency's estimated dates
+  and `estimated = TRUE`. Checked against the three recorded responses.
+* `dedupe_records()`: new column `n_databases` (how many databases found a
+  record); `n_found` counts merged records and was read as databases.
+* `route(method = "embedding")`: the reason gives the similarity and the
+  weight (the number a threshold is compared with).
+
+## Writing tools
+
+* `write_in_style()`: told to use only the content of the brief, and its
+  text is checked in code: numbers and figure or table references that are
+  not in the brief are listed in `attr(x, "added")` and reported. In the run
+  of November 22 the draft had reused two fit values of the source paper and
+  pointed to a "Figure 3".
+* `learn_style()` no longer removes the names of its own measures
+  ("we/our/us") from the guide as quotations not found.
+* `validate_skill()`: a file path written as plain text in the body counts
+  as a reference (the style skill showed "0 reference(s)"); new rule
+  "bundled reference files are named in the body".
+
+## Activities
+
+* 03: `n_databases`. 07: NSF and Grants.gov outputs explained. 08:
+  `total_tokens` in the single-versus-team comparison; fan-out comments.
+  08b: an unknown tool is a protocol error in the specification and a tool
+  error on DeepWiki; the code handles both. 10: the cascade is compared with
+  the two fixed models on the same two tools (one more run, "strong, 2
+  tools"); its runtime check asks RePORTER whether the project exists in
+  2025. 12: the router did not pay with Jev as second screener, and the
+  comments say so. 15: weight and similarity. 16: the typography trap, shown
+  with `plain_punctuation()`; the grader accepts "95 % CI". 17: the
+  added-content check.
+* Recorded-run sentences whose values these changes make out of date were
+  removed; they are written again after the next full run.
+
 # researchAgentR 0.1.3 (November 22, 2026, night)
 
 * **Fix: time limits with httr2 1.3.0.** The time limit added in 0.1.2 gave

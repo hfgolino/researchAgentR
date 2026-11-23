@@ -186,8 +186,35 @@ check("agent_scout", run(scout, "Find two papers on exploratory graph analysis f
 # ---- 7. Funding, web, code, classification -------------------------------------
 check("search_nih_projects", search_nih_projects("ecological momentary assessment", fiscal_years = 2025, n = 3),
       summary = function(d) paste(nrow(d), "rows;", paste(names(d), collapse = ","), ";", paste(d[[1]], collapse = ", ")))
+# The benchmark's NIH grader looks a project up by its number: a project that
+# the search above returned must pass, and a number that does not exist must not.
+check("nih_grader_by_number", {
+  found <- objects[["search_nih_projects"]]
+  if (is.null(found) || !nrow(found)) stop("no NIH project to check with (the search above failed)")
+  core <- sub("-.*$", "", sub("^[1-9]", "", found$project_num[1]))
+  by_number <- search_nih_projects(project_nums = paste0("*", core, "*"), fiscal_years = 2025, n = 10)
+  grade <- researchAgentR:::.grader_nih_fy(2025, "ecological momentary assessment")
+  real <- grade(paste("Project", found$project_num[1]), list(id = "smoke"))
+  fake <- grade("Project 5R01MH000000-01", list(id = "smoke"))
+  if (!isTRUE(real$pass)) stop("a project returned by the search did not pass its own grader: ", real$reason)
+  if (isTRUE(fake$pass)) stop("a project number that does not exist passed the grader")
+  list(core = core, rows = nrow(by_number), reason = real$reason)
+}, summary = function(x) paste0(x$core, ": ", x$rows, " row(s) with *number*; ", x$reason))
 check("search_nsf_awards", search_nsf_awards("psychometrics", n = 3),
       summary = function(d) paste(nrow(d), "rows;", paste(names(d), collapse = ",")))
+# Several words: NSF matches any of them, so the package asks for the rarest
+# word and keeps the awards that contain every word. The totals NSF reports
+# for other ways of writing the query are printed for information.
+check("search_nsf_every_word", {
+  res <- search_nsf_awards("psychometric machine learning", n = 5)
+  total_of <- function(...) attr(search_nsf_awards(..., n = 1), "total")
+  list(res = res, any = total_of("psychometric machine learning", match = "any"),
+       phrase = total_of("machine learning", match = "phrase"),
+       and = total_of("psychometric AND \"machine learning\""))
+}, summary = function(x) sprintf(
+  "%d rows with every word (read %d of %s awards for '%s') | NSF totals: any word %s; \"machine learning\" %s; with AND %s | %s",
+  nrow(x$res), attr(x$res, "scanned"), attr(x$res, "total"), attr(x$res, "query")$keyword,
+  x$any, x$phrase, x$and, paste(substr(x$res$title, 1, 40), collapse = " / ")))
 gg <- check("search_grants_gov", search_grants_gov("mental health", n = 3),
       summary = function(d) paste(nrow(d), "rows;", paste(names(d), collapse = ",")))
 if (is.data.frame(gg) && nrow(gg)) {

@@ -11,8 +11,10 @@ dedupe_records(df)
 \code{database}, for example \code{rbind()} of several search results.}
 }
 \value{
-The deduplicated data frame with a new column \code{n_found} (how many
-records were merged into each row). The attribute \code{dedup} is a data
+The deduplicated data frame with two new columns: \code{n_databases}
+(how many different databases found the record) and \code{n_found} (how many
+records were merged into the row, which is larger when one database
+returned several versions of a work). The attribute \code{dedup} is a data
 frame with the counts: records in, duplicates removed by DOI, by title
 and year, and records out.
 }

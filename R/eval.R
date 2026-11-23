@@ -503,7 +503,13 @@ task_compare <- function(a, b, metric = "pass") {
   out
 }
 
-.solver_name <- function(x) attr(x, "solver") %||% (if ("solver" %in% names(x)) x$solver[1]) %||% "?"
+# The solver(s) of a set of results. The `solver` column comes first: a
+# subset of results from several solvers keeps the attribute of the whole set.
+.solver_name <- function(x) {
+  inside <- if ("solver" %in% names(x)) unique(as.character(x$solver[!is.na(x$solver)]))
+  if (length(inside)) return(paste(inside, collapse = " + "))
+  paste(attr(x, "solver") %||% "?", collapse = " + ")
+}
 
 #' @export
 print.paired_bootstrap <- function(x, ...) {
@@ -568,8 +574,13 @@ plot_frontier <- function(..., log_cost = FALSE) {
   cols <- c(`Pareto front` = "#0072B2", Dominated = "#D55E00")
   s$status <- ifelse(s$pareto, "Pareto front", "Dominated")
   if (requireNamespace("ggplot2", quietly = TRUE)) {
-    p <- ggplot2::ggplot(s, ggplot2::aes(x = .data$cost_per_attempt, y = .data$success_rate)) +
-      ggplot2::geom_line(data = front, colour = cols[["Pareto front"]], linewidth = 0.6) +
+    p <- ggplot2::ggplot(s, ggplot2::aes(x = .data$cost_per_attempt, y = .data$success_rate))
+    # A front of one solver is a point: a line through it would only make
+    # ggplot2 print a message.
+    if (nrow(front) > 1) {
+      p <- p + ggplot2::geom_line(data = front, colour = cols[["Pareto front"]], linewidth = 0.6)
+    }
+    p <- p +
       ggplot2::geom_point(ggplot2::aes(colour = .data$status, shape = .data$status), size = 3) +
       ggplot2::geom_text(ggplot2::aes(label = .data$solver), hjust = 0, vjust = 0.5,
                          size = 3.3, colour = "grey20",

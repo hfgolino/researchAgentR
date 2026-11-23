@@ -844,16 +844,21 @@ review_report <- function(review, file = "review.html") {
   invisible(file)
 }
 
-# Find a quote in a text: exactly first, then with flexible whitespace and
-# quote characters. Returns the start positions and match lengths.
+# Find a quote in a text: exactly first, then with flexible spaces, quote
+# characters and hyphens (a model that copies "five-point" may have read a
+# non-breaking hyphen, and the reverse). Returns the start positions and
+# match lengths in the ORIGINAL text, so the span can be replaced there.
 .locate <- function(quote, text) {
   m <- gregexpr(quote, text, fixed = TRUE)[[1]]
   if (m[1] > 0) return(list(start = as.integer(m), length = rep(nchar(quote), length(m))))
   tokens <- strsplit(.norm_text(quote), " ", fixed = TRUE)[[1]]
   esc <- gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", tokens)
-  esc <- gsub("'", "['\u2018\u2019]", esc, fixed = TRUE)
-  esc <- gsub("\"", "[\"\u201C\u201D]", esc, fixed = TRUE)
-  m <- gregexpr(paste(esc, collapse = "\\s+"), text, perl = TRUE)[[1]]
+  # (the hyphen first: the classes below contain a hyphen of their own)
+  esc <- gsub("-", "[-\u2010-\u2015\u2212]", esc, fixed = TRUE)
+  esc <- gsub("'", "['\u2018-\u201B\u2032]", esc, fixed = TRUE)
+  esc <- gsub("\"", "[\"\u201C-\u201F\u2033]", esc, fixed = TRUE)
+  # (*UCP) makes \\s match non-breaking and narrow spaces too
+  m <- gregexpr(paste0("(*UCP)", paste(esc, collapse = "\\s+")), text, perl = TRUE)[[1]]
   if (m[1] > 0) return(list(start = as.integer(m), length = attr(m, "match.length")))
   list(start = integer(0), length = integer(0))
 }

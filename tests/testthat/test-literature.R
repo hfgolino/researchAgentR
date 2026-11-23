@@ -136,6 +136,13 @@ test_that("dedupe_records() merges by DOI, then by title and year, keeping prove
   expect_equal(d$database, c("OpenAlex; Crossref", "OpenAlex; Crossref", "OpenAlex"))
   expect_equal(d$abstract[1], "Toy abstract.")   # filled from the duplicate
   expect_equal(d$n_found, c(2L, 2L, 1L))
+  expect_equal(d$n_databases, c(2L, 2L, 1L))
+  # Two versions of one work from the SAME database: two records, one database.
+  twice <- dedupe_records(rbind(a, a[1, ], b))
+  expect_equal(twice$n_found[1], 3L); expect_equal(twice$n_databases[1], 2L)
+  again <- dedupe_records(rbind(d[, names(a)], b))                       # a table that was deduplicated before
+  expect_equal(again$n_databases, c(2L, 2L, 1L)); expect_equal(again$database[1], "OpenAlex; Crossref")
+  expect_true(all(c("n_databases", "n_found") %in% names(dedupe_records(a[0, ]))))
   counts <- attr(d, "dedup")
   expect_equal(counts$n, c(5L, 1L, 1L, 3L))
   # Different years are not duplicates.
@@ -249,4 +256,14 @@ test_that("tool_get_work is a tool with one DOI argument", {
   expect_s3_class(t, "agent_tool")
   expect_equal(t$name, "get_work")
   expect_match(tool_schema(t), '"doi"')
+})
+
+test_that("the researcher's n is the limit of a search tool call", {
+  expect_equal(.lit_n(NULL, 5), 5L)       # the model did not say: the researcher's number
+  expect_equal(.lit_n(3, 5), 3L)          # fewer is allowed
+  expect_equal(.lit_n(50, 5), 5L)         # more is not
+  expect_equal(.lit_n(0, 5), 1L)
+  expect_equal(.lit_n("many", 5), 5L)
+  expect_match(tool_schema(tool_openalex(n = 5)), "at most 5")
+  expect_match(tool_schema(tool_snowball(n = 7)), "at most 7")
 })

@@ -29,6 +29,7 @@
 #   create_skill()       draft a skill from a few sentences (one model call)
 #   test_skill()         run prompts with and without the skill, and grade
 #   grader_code()        a grader written in R (see Activity 04)
+#   plain_punctuation()  replace typographic characters that models write
 #   call_tool(), episode_steps(), run_r_code()   inspection and the sandbox
 # TIME: about 50 minutes.  COST: free tier (Groq). Steps 1, 2, 3, 5, 6 and 9
 # run offline; Steps 4, 7 and 8 call a model.
@@ -161,7 +162,7 @@ apa_grader <- grader_code(function(answer, task) {
   # "d = 0.71", "g = .70", "r = .32" or "r(118) = .32"; the value is the number.
   es <- regmatches(txt, regexpr("\\b(d|g|r)(\\(\\d+\\))?\\s*=\\s*-?[0-9]*\\.?[0-9]+", txt, perl = TRUE))
   has_es <- length(es) == 1
-  has_ci <- grepl("95%\\s*CI\\s*\\[[^]]+\\]", txt, perl = TRUE)
+  has_ci <- grepl("95\\s?%\\s*CI\\s*\\[[^]]+\\]", txt, perl = TRUE)   # "95% CI [..]" or "95 % CI [..]"
   value <- if (has_es) as.numeric(sub("^.*=\\s*", "", es)) else NA
   close <- !is.na(value) && abs(abs(value) - abs(task$expected_es)) <= 0.02
   list(pass = has_es && has_ci && close,
@@ -181,6 +182,21 @@ apa_grader(bad,  as.list(apa_tasks[1, ]))
 # offline, the reason for `bad` reads
 # "effect size: FALSE; 95% CI: FALSE; value within 0.02 of 0.71: FALSE";
 # each result is a list with pass, score, reason and cost (0).
+
+# A trap for every grader that compares text: models often write characters
+# that only LOOK like plain punctuation. In the first live run of this
+# activity the model wrote a narrow no-break space around every "=" and a
+# non-breaking hyphen in "independent-samples". On the screen the answer
+# reads the same; for grepl() it is another text.
+typographic <- gsub(" = ", "\u202f=\u202f", good, fixed = TRUE)
+typographic
+grepl("d = 0.71", typographic, fixed = TRUE)
+grepl("d = 0.71", plain_punctuation(typographic), fixed = TRUE)
+apa_grader(typographic, as.list(apa_tasks[1, ]))$pass
+# EXPECTED OUTPUT: the sentence, printed like `good`; then FALSE (the spaces
+# around "=" are other characters), TRUE (plain_punctuation() replaced them)
+# and TRUE: graders made with grader_code() and its relatives replace
+# typographic punctuation in the answer before they grade it.
 
 
 # ==============================================================================
@@ -330,10 +346,7 @@ aggregate(pass ~ id + condition, data = apa_test, FUN = mean)
 # grader_failures (0 with a code grader) and cost. The per-task table shows
 # which prompts the skill fixed and which it did not. With 9 runs per
 # condition, a difference of one or two passes is noise; Activity 09 shows
-# how to put a confidence interval on such a comparison. Recorded run
-# (November 22, 2026): pass_rate 0 and mean_score 0 in both conditions (all
-# 18 reasons read "effect size: FALSE; 95% CI: FALSE; ..."); cost
-# 0.000274950 without and 0.000796875 with the skill.
+# how to put a confidence interval on such a comparison.
 
 
 # ==============================================================================
@@ -445,6 +458,10 @@ sandboxed$error
 #   and a judge that should be calibrated first (Activity 09).
 # - 429 errors (rate limit) during test_skill(): free-tier tokens per minute
 #   are tight. Reduce trials, or set options(researchAgentR.rpm.groq = 20).
+# - Every answer fails a grader that looks right: print one answer and its
+#   reason before changing the skill. If the text on the screen should match
+#   the pattern, compare it with plain_punctuation() of itself (Step 3): a
+#   comparison of your own, outside a grader, needs that function too.
 
 
 # ==============================================================================

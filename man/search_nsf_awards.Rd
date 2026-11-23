@@ -4,7 +4,13 @@
 \alias{search_nsf_awards}
 \title{Search funded NSF awards}
 \usage{
-search_nsf_awards(keyword, n = 25, date_start = NULL, date_end = NULL)
+search_nsf_awards(
+  keyword,
+  n = 25,
+  date_start = NULL,
+  date_end = NULL,
+  match = c("all", "any", "phrase")
+)
 }
 \arguments{
 \item{keyword}{Words to search for in award titles and abstracts.}
@@ -14,12 +20,19 @@ search_nsf_awards(keyword, n = 25, date_start = NULL, date_end = NULL)
 \item{date_start, date_end}{Optional range for the award start date, as
 \code{"yyyy-mm-dd"} or \code{Date} (sent as NSF's \code{startDateStart} and
 \code{startDateEnd}, in mm/dd/yyyy).}
+
+\item{match}{For a \code{keyword} of several words: \code{"all"} keeps the awards
+that contain every word, \code{"any"} returns what NSF returns (any of the
+words), \code{"phrase"} sends the words in double quotes, which NSF reads as
+one phrase. A \code{keyword} that already has double quotes or the wildcards
+\code{*} and \verb{?} is sent as it is.}
 }
 \value{
 A data frame with \code{id}, \code{title}, \code{pi}, \code{organization}, \code{agency},
 \code{award_date}, \code{start_date}, \code{end_date}, \code{amount} (funds obligated, US
-dollars), \code{abstract} and \code{url}, with attributes \code{total} (when the API
-reports it), \code{query} and \code{retrieved_at}.
+dollars), \code{abstract} and \code{url}, with attributes \code{total} (the number of
+awards NSF reports for the query it received), \code{scanned} (awards read),
+\code{match}, \code{query} and \code{retrieved_at}.
 }
 \description{
 Queries the NSF Award Search API (\code{awards.json}), which needs no key. The
@@ -27,10 +40,23 @@ API returns at most 25 awards per request, so larger \code{n} values are
 fetched page by page. Documentation:
 \url{https://resources.research.gov/common/webapi/awardapisearch-v1.htm}.
 }
+\details{
+NSF's free-text search returns the awards that contain ANY of several
+words, in no order of relevance, so \code{"measurement invariance"} mostly
+returns awards about other kinds of measurement. With \code{match = "all"}
+(the default) the search is done in two steps: NSF is asked how many awards
+each word has, then for the awards of the rarest word, and only those
+whose title or abstract contains every word are kept. At most
+\code{max(100, 4 * n)} awards are read, so a very common rarest word can leave
+matching awards unread: the message and the attributes say how many were
+read. A word matches as part of a longer word (\code{"psychometric"} also
+finds "psychometrics"), and words of one or two letters are ignored.
+}
 \examples{
 \dontrun{
 nsf <- search_nsf_awards("psychometrics machine learning", n = 10,
                          date_start = "2024-01-01")
 nsf[, c("id", "title", "amount")]
+attributes(nsf)[c("total", "scanned", "match")]
 }
 }

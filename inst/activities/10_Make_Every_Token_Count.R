@@ -310,8 +310,9 @@ rbind(stable = cache_share(file.path(EP_DIR, "small_menu")),
 
 # Try the cheap model first; escalate to the strong one only when a check
 # fails. The check runs at ANSWER time, so it may not use the answer key: it
-# checks what can be checked without it. Place a verifier where the expected
-# cost of an error is larger than the cost of checking.
+# checks what can be checked without it (does the DOI exist? was a project
+# with this number funded in 2025?). Place a verifier where the expected cost
+# of an error is larger than the cost of checking.
 runtime_check <- grader_code(function(answer, task) {
   a <- paste(answer, collapse = " ")
   if (grepl("DOI", task$instruction)) {
@@ -321,9 +322,14 @@ runtime_check <- grader_code(function(answer, task) {
     return(v$status[1] == "verified")
   }
   if (grepl("NIH", task$instruction)) {
-    return(grepl("[A-Z][0-9]{2}[A-Z]{2}[0-9]{6}", toupper(a)))   # looks like a project number
+    core <- regmatches(toupper(a), regexpr("[A-Z][0-9]{2}[A-Z]{2}[0-9]{6}", toupper(a)))
+    if (!length(core)) return(FALSE)                       # no project number in the answer
+    # RePORTER writes a number as 5R01MH123456-03: a type digit, the core
+    # number, the support year. "*" stands for any characters.
+    found <- search_nih_projects(project_nums = paste0(1:9, core, "*"), fiscal_years = 2025, n = 1)
+    return(nrow(found) > 0)                                # funded in fiscal year 2025?
   }
-  nzchar(trimws(a)) && nchar(a) < 200                            # a short, non-empty answer
+  nzchar(trimws(a)) && nchar(a) < 200                      # a short, non-empty answer
 }, label = "runtime check (no answer key)")
 
 finder_cascade <- cascade(c(CHEAP, STRONG), verifier = runtime_check,
@@ -332,19 +338,26 @@ finder_cascade <- cascade(c(CHEAP, STRONG), verifier = runtime_check,
 res_cascade <- keep("opt10_cascade", fresh_trials(
   run_eval(finder_cascade, dev, trials = TRIALS, budget = B,
            save_dir = file.path(EP_DIR, "cascade"), name = "cascade 20b -> 120b")))
-eval_summary(list(cheap_runs, strong_runs, res_cascade), k = c(1, 3))
-# EXPECTED OUTPUT: three rows. The cascade's cost includes EVERY attempt
-# (the failed cheap one too) and the verifier. A good cascade sits between
-# the two fixed models on cost while keeping success close to the strong one.
-# Recorded run (November 22, 2026): the cascade had success_rate 0.75 and
-# cost_per_success 0.0002488750, below both baselines (cheap 0.0004760344,
-# strong 0.0008143667), which carry 8 tools against the cascade's 2.
+
+# A fair comparison changes one thing. The cascade uses the two-tool menu, so
+# it is compared with the two FIXED models on the same menu: "cheap, 2 tools"
+# from Step 5, and the strong model with the same two tools.
+res_strong_menu <- keep("opt10_strong_small_menu", fresh_trials(
+  run_eval(make_finder(STRONG, tools = SMALL_MENU), dev, trials = TRIALS, budget = B,
+           save_dir = file.path(EP_DIR, "strong_small_menu"), name = "strong, 2 tools")))
+eval_summary(list(res_menu, res_strong_menu, res_cascade), k = c(1, 3))
+# EXPECTED OUTPUT: three rows with the same two tools. The cascade's cost
+# includes EVERY attempt (the failed cheap one too) and the verifier. A good
+# cascade sits between the two fixed models on cost while keeping success
+# close to the strong one. When the cheap model passes the check every time,
+# the cascade IS the cheap model plus the cost of checking, and its success
+# rate cannot exceed what the check can see: a check that only asks "does
+# this DOI exist?" lets the DOI of the wrong paper through.
 
 table(res_cascade$model)      # which model gave the final answer?
 # EXPECTED OUTPUT: counts of trials answered by each model (escalations
-# appear under the strong model).
-# Recorded run (November 22, 2026): all 12 trials were answered by
-# groq:openai/gpt-oss-20b (no escalation to the strong model).
+# appear under the strong model). No escalation at all is a result too: the
+# cheap model's answers passed the check every time.
 
 
 # ==============================================================================
@@ -417,7 +430,7 @@ table(res_tight$stop_reason, res_tight$pass, useNA = "ifany")
 # STEP 12: ALL VARIANTS ON ONE FRONTIER, AND A LEADERBOARD
 # ==============================================================================
 
-variants <- list(base, res_menu, res_filtered, res_unstable, res_cascade, res_tight)
+variants <- list(base, res_menu, res_filtered, res_unstable, res_strong_menu, res_cascade, res_tight)
 # if (exists("res_haiku")) variants <- c(variants, list(res_haiku))
 # if (exists("res_luna"))  variants <- c(variants, list(res_luna))
 summary_all <- eval_summary(variants, k = c(1, 3))
@@ -426,10 +439,6 @@ plot_frontier(summary_all, log_cost = TRUE)
 # EXPECTED OUTPUT: a table with one row per variant, and the quality-cost
 # frontier (success rate against cost per attempted task, log scale) with the
 # Pareto front marked.
-# Recorded run (November 22, 2026): 8 rows; success_rate 0.75 for all but the
-# cheap baseline (0.6666667, pass^3 0.50); cost_per_success from 0.0002350417
-# ("cheap, 2 tools") to 0.0008143667 (strong baseline); ggplot2 also printed
-# "`geom_line()`: Each group consists of only one observation."
 
 # A leaderboard by Pareto LAYERS on three criteria: success (higher is
 # better), cost per success and median time (lower is better). Layer 1 holds
@@ -478,6 +487,7 @@ offline <- rbind(
   cost_ledger(res_menu, kind = "offline", note = "tool menu"),
   cost_ledger(res_filtered, kind = "offline", note = "filtered output"),
   cost_ledger(res_unstable, kind = "offline", note = "unstable prefix"),
+  cost_ledger(res_strong_menu, kind = "offline", note = "strong model, small menu"),
   cost_ledger(res_cascade, kind = "offline", note = "cascade"),
   cost_ledger(res_tight, kind = "offline", note = "tight budget"))
 

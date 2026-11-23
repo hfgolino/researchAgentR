@@ -193,3 +193,14 @@ test_that("lower-case organizations are matched in text and reference list", {
   ct <- researchAgentR:::.intext_citations("Models on the Groq API (groq, 2024) were used.")
   expect_true("groq_2024" %in% ct$key)
 })
+
+test_that("a quote is located in the original text whatever its typography", {
+  src <- "The scale has a five‑point format, and t(48) = 2.51, p = .016. It’s “good”."
+  at <- function(q) { l <- .locate(q, src); substring(src, l$start, l$start + l$length - 1) }
+  expect_equal(at("five-point format"), "five‑point format")             # the span as it is in the file
+  expect_equal(at("t(48) = 2.51, p = .016"), "t(48) = 2.51, p = .016")
+  expect_equal(at("It's \"good\""), "It’s “good”")
+  expect_equal(at("five‑point format"), "five‑point format")        # an exact match comes first
+  expect_length(.locate("six-point format", src)$start, 0)
+  expect_length(.locate("t(48) = 2.51", "t(48) = 2.51 and again t(48) = 2.51")$start, 1)   # exact first
+})

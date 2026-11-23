@@ -257,8 +257,14 @@ validate_skill <- function(path) {
   missing <- refs[!file.exists(file.path(path, refs))]
   add("referenced files exist", "recommended", !length(missing),
       if (length(missing)) paste("missing:", paste(missing, collapse = ", ")) else
-        paste(length(refs), "reference(s)"))
+        paste(length(refs), "file(s) named in the body"))
   files <- list.files(path, recursive = TRUE)
+  # An agent loads a bundled file only when the instructions point to it.
+  bundled <- files[grepl("^(references|assets)/", files)]
+  unnamed <- setdiff(bundled, refs)
+  add("bundled reference files are named in the body", "recommended", !length(unnamed),
+      if (length(unnamed)) paste("never loaded unless SKILL.md names them:", paste(unnamed, collapse = ", ")) else
+        paste(length(bundled), "bundled file(s)"))
   text_files <- setdiff(files[grepl("\\.(md|txt)$", files, ignore.case = TRUE)], "SKILL.md")
   nested <- text_files[vapply(text_files, function(tf) {
     links <- .local_links(read_text(file.path(path, tf), encoding = "UTF-8"))
@@ -280,14 +286,17 @@ validate_skill <- function(path) {
   finish(name %||% NA_character_, desc %||% NA_character_, scripts)
 }
 
-# Relative paths a Markdown text points to: link targets and backticked paths
-# under scripts/, references/ or assets/ (web links and anchors excluded).
+# Relative paths a Markdown text points to: link targets, and paths under
+# scripts/, references/ or assets/ written in backticks or as plain text
+# ("read references/guide.md."). Web links and anchors are excluded.
 .local_links <- function(lines) {
   text <- paste(lines, collapse = "\n")
   links <- regmatches(text, gregexpr("\\]\\(([^)#\\s]+)\\)", text, perl = TRUE))[[1]]
   links <- sub("^\\]\\(", "", sub("\\)$", "", links))
-  ticks <- regmatches(text, gregexpr("`((?:scripts|references|assets)/[^`\\s]+)`", text, perl = TRUE))[[1]]
-  out <- unique(c(links, gsub("`", "", ticks)))
+  # a path ends with a letter, digit, "_" or "-": the period that ends a sentence is not part of it
+  plain <- regmatches(text, gregexpr("(?<![A-Za-z0-9_/.-])(?:scripts|references|assets)/[A-Za-z0-9_./-]*[A-Za-z0-9_-]",
+                                     text, perl = TRUE))[[1]]
+  out <- unique(c(links, plain))
   out[!grepl("^[a-z]+://|^mailto:", out)]
 }
 

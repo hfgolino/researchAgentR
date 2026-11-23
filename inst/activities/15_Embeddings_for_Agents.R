@@ -582,14 +582,15 @@ ep_dispatch <- keep("act15_dispatch",
   dispatch("How many participants per group do I need for a two-group t-test with d = 0.4 and 80% power?"))
 ep_dispatch
 # EXPECTED OUTPUT: a message "Routed to design_advisor (cosine similarity
-# ...)" (or the LLM router's reason, if the weight was below 0.6), then the
-# <episode> of the design advisor: its stop reason, model and tool calls,
-# tokens and cost. A correct answer comes from pwr::pwr.t.test() output in a
-# run_r step (episode_steps(ep_dispatch) shows the code and what it printed).
-# Recorded run (November 22, 2026): the message gave cosine similarity 0.585
-# (the raw similarity, not the weight that is compared with 0.6); stop
-# reason final_answer, 2 model calls, 1 tool call, 1,089 tokens, $0.00013;
-# run_r printed n = 99.08032 and the answer said about 99 per group.
+# ..., weight ...)" (or the LLM router's reason, if the weight was below
+# 0.6), then the <episode> of the design advisor: its stop reason, model and
+# tool calls, tokens and cost. The similarity is what was measured; the
+# weight is the number compared with min_weight. A correct answer comes from
+# pwr::pwr.t.test() output in a run_r step (episode_steps(ep_dispatch) shows
+# the code and what it printed).
+# Recorded run (November 22, 2026): cosine similarity 0.585; stop reason
+# final_answer, 2 model calls, 1 tool call, 1,089 tokens, $0.00013; run_r
+# printed n = 99.08032 and the answer said about 99 per group.
 
 
 # ==============================================================================

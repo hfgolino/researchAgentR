@@ -111,12 +111,30 @@ test_that("quotation checks find verbatim spans and reject invented ones", {
   expect_true(.quote_found("were \"stable\"", src))
   expect_false(.quote_found("the model converged quickly", src))
   expect_false(.quote_found("across samples ... The model", src))  # wrong order
+  typo <- .norm_text("A well\u2011known five\u2011point scale, p\u202f<\u202f.001.")
+  expect_true(.quote_found("well-known five-point scale, p < .001", typo))       # typography is not content
+  expect_false(.quote_found("well-known six-point scale", typo))
   guide <- "Uses \"estimated twice\" and \u201Cinvented phrase\u201D often."
   q <- .extract_quotes(guide)
   expect_setequal(q, c("estimated twice", "invented phrase"))
   cleaned <- .remove_quotes(guide, "invented phrase")
   expect_false(grepl("invented phrase", cleaned))
   expect_match(cleaned, "quotation removed")
+})
+
+test_that("a guide keeps the names of the measures it was given, and loses invented quotations", {
+  source <- "The model was estimated twice; the estimates were stable across samples."
+  given <- "Measured in code: per 1,000 words: we/our/us 4.2, I/me/my 0.0; frequent transitions: however, thus."
+  guide <- paste("First person (\"we/our/us\") is rare and \"I/me/my\" is absent.",
+                 "Typical: \"estimated twice\". Never: \"invented phrase\".")
+  out <- .verify_guide_quotes(guide, source, given = given)
+  expect_match(out$guide, "\"we/our/us\"", fixed = TRUE)          # a label from the prompt: kept
+  expect_match(out$guide, "\"I/me/my\"", fixed = TRUE)
+  expect_match(out$guide, "\"estimated twice\"", fixed = TRUE)    # a real quotation: kept
+  expect_false(grepl("invented phrase", out$guide))               # not in the source, not a label: removed
+  expect_equal(out$quotes, c("estimated twice", "invented phrase")) # labels are not counted as quotations
+  expect_equal(out$found, c(TRUE, FALSE))
+  expect_equal(.verify_guide_quotes(guide, source)$found, c(FALSE, FALSE, TRUE, FALSE))   # without the labels
 })
 
 test_that("the plain-text reader drops YAML and code and keeps sections", {
@@ -146,4 +164,14 @@ test_that("learn_style and write_in_style work live", {
   txt <- write_in_style("One paragraph on why attrition matters in panel studies.", st,
                         model = "groq:openai/gpt-oss-20b")
   expect_s3_class(attr(txt, "style_distance"), "style_distance")
+})
+
+test_that("numbers and figure references that a model added are found", {
+  brief <- "One paragraph: why 3 embedding dimensions were used for the 1,000 tweets (see Table 2); alpha was .05."
+  text <- paste("With 3 embedding dimensions and 1000 tweets (Table 2), fit improved to 0.87, as Figure 3",
+                "shows; alpha was 0.050. In 2022, TEFI was \u22123.2 [CITATION NEEDED]. See Appendix B.")
+  expect_equal(.added_content(text, brief), c("Figure 3", "Appendix B", "0.87", "2022", "3.2"))
+  expect_length(.added_content("Three dimensions were used, as Table 2 shows; alpha was .05.", brief), 0)
+  expect_length(.added_content("No numbers here.", "None there."), 0)
+  expect_equal(.added_content("The 2nd wave had N = 120 (p < .001).", "The second wave."), c("120", ".001"))
 })

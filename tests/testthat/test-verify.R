@@ -62,6 +62,11 @@ test_that("quotes are matched verbatim, ignoring typography and spacing", {
   expect_false(.quote_in_source("EGA always recovers the structure", src))
   expect_false(.quote_in_source("", src))
   expect_false(.quote_in_source(NA, src))
+  # narrow and non-breaking spaces, a non-breaking hyphen, a zero-width space
+  typo <- "A five\u2011point scale; t(48)\u00a0=\u00a02.51, p\u202f=\u202f.016\u200b."
+  expect_true(.quote_in_source("five-point scale; t(48) = 2.51, p = .016", typo))
+  expect_true(.quote_in_source("five\u2011point scale", "A five-point scale."))   # and the other way round
+  expect_false(.quote_in_source("six-point scale", typo))
   expect_equal(.normalize_quote("It\u2019s \u201cX\u201d \u2013 Y"), "it's \"x\" - y")
 })
 

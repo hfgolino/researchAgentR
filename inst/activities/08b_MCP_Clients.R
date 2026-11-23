@@ -145,17 +145,20 @@ cat(substr(answer_gg$text, 1, 2000), "\n")
 bad_repo <- mcp_call(dw, "read_wiki_structure", list(repoName = "no-such-owner/no-such-repo"))
 bad_repo$is_error
 cat(substr(bad_repo$text, 1, 300), "\n")
-# (b) A protocol error (unknown tool, malformed request) stops with an error
-#     of class mcp_error.
-tryCatch(mcp_call(dw, "no_such_tool", list()),
-         mcp_error = function(e) conditionMessage(e))
-# EXPECTED OUTPUT: for (a), is_error TRUE (or an explanatory text, depending
-# on how the server reports it); for (b), "MCP error <code>: ..." when the
-# server answers with a protocol error.
+# (b) A protocol error stops with an R error of class mcp_error. The MCP
+#     specification lists an unknown tool among the protocol errors, but
+#     servers differ: DeepWiki reports it as a tool error, like (a). Code
+#     that calls a server should therefore handle both.
+unknown <- tryCatch(mcp_call(dw, "no_such_tool", list()),
+                    mcp_error = function(e) conditionMessage(e))
+if (is.character(unknown)) unknown else unknown[c("is_error", "text")]
+# EXPECTED OUTPUT: for (a), is_error TRUE and a text that explains why; for
+# (b), with a server that answers with a protocol error, one line "MCP error
+# <code>: ..."; with DeepWiki, a list with is_error TRUE and a text.
 # Recorded run (November 22, 2026): (a) TRUE, then "Error fetching wiki for
 # no-such-owner/no-such-repo: Repository not found. ..."; (b) no mcp_error
 # was raised: DeepWiki answered with a normal result whose is_error is TRUE
-# and whose text is "Unknown tool: 'no_such_tool'", printed as a list.
+# and whose text is "Unknown tool: 'no_such_tool'".
 
 
 # ==============================================================================

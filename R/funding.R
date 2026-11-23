@@ -10,7 +10,7 @@
 # Field names follow the RePORTER API v2 documentation:
 # https://api.reporter.nih.gov/ (Project search parameters).
 .nih_criteria <- function(text = NULL, fiscal_years = NULL, agencies = NULL,
-                          pi_names = NULL, ...) {
+                          pi_names = NULL, project_nums = NULL, ...) {
   criteria <- list()
   if (length(text) && nzchar(text)) {
     # Search the title, the scientific terms and the abstract, requiring
@@ -25,6 +25,7 @@
     # Name fields accept partial names (wildcards are on by default).
     criteria$pi_names <- lapply(pi_names, function(p) list(any_name = p))
   }
+  if (length(project_nums)) criteria$project_nums <- as.list(as.character(unlist(project_nums)))
   c(criteria, list(...))
 }
 
@@ -85,6 +86,10 @@
 #'   match).
 #' @param n Number of projects to return (at most 500 per request).
 #' @param offset Number of records to skip, for paging (at most 14,999).
+#' @param project_nums Optional vector of project numbers, to look projects up
+#'   instead of searching by topic. A full number names one award year
+#'   (`"5R01MH123456-03"`); `*` stands for any characters, so
+#'   `"*R01MH123456*"` finds every year of that project.
 #' @param ... Other RePORTER criteria passed as they are, for example
 #'   `org_names = list("UNIVERSITY OF VIRGINIA")`.
 #' @return A data frame with `project_num`, `title`, `pi` (contact PI),
@@ -98,13 +103,15 @@
 #'                            fiscal_years = 2025, agencies = "NIA", n = 10)
 #' nih[, c("project_num", "title", "award_amount")]
 #' attr(nih, "total")
+#' # Look one project up by its number, in every fiscal year:
+#' search_nih_projects(project_nums = paste0("*", sub("^[0-9]|-.*$", "", nih$project_num[1]), "*"))
 #' }
 #' @export
 search_nih_projects <- function(text = NULL, fiscal_years = NULL, agencies = NULL,
-                                pi_names = NULL, n = 25, offset = 0, ...) {
-  criteria <- .nih_criteria(text, fiscal_years, agencies, pi_names, ...)
+                                pi_names = NULL, n = 25, offset = 0, project_nums = NULL, ...) {
+  criteria <- .nih_criteria(text, fiscal_years, agencies, pi_names, project_nums, ...)
   if (!length(criteria)) {
-    .stop("Give at least one of `text`, `fiscal_years`, `agencies` or `pi_names`: ",
+    .stop("Give at least one of `text`, `fiscal_years`, `agencies`, `pi_names` or `project_nums`: ",
           "an empty search would ask RePORTER for every project.")
   }
   n <- as.integer(n)
@@ -166,51 +173,115 @@ search_nih_projects <- function(text = NULL, fiscal_years = NULL, agencies = NUL
 #' fetched page by page. Documentation:
 #' <https://resources.research.gov/common/webapi/awardapisearch-v1.htm>.
 #'
+#' NSF's free-text search returns the awards that contain ANY of several
+#' words, in no order of relevance, so `"measurement invariance"` mostly
+#' returns awards about other kinds of measurement. With `match = "all"`
+#' (the default) the search is done in two steps: NSF is asked how many awards
+#' each word has, then for the awards of the rarest word, and only those
+#' whose title or abstract contains every word are kept. At most
+#' `max(100, 4 * n)` awards are read, so a very common rarest word can leave
+#' matching awards unread: the message and the attributes say how many were
+#' read. A word matches as part of a longer word (`"psychometric"` also
+#' finds "psychometrics"), and words of one or two letters are ignored.
+#'
 #' @param keyword Words to search for in award titles and abstracts.
 #' @param n Number of awards to return.
 #' @param date_start,date_end Optional range for the award start date, as
 #'   `"yyyy-mm-dd"` or `Date` (sent as NSF's `startDateStart` and
 #'   `startDateEnd`, in mm/dd/yyyy).
+#' @param match For a `keyword` of several words: `"all"` keeps the awards
+#'   that contain every word, `"any"` returns what NSF returns (any of the
+#'   words), `"phrase"` sends the words in double quotes, which NSF reads as
+#'   one phrase. A `keyword` that already has double quotes or the wildcards
+#'   `*` and `?` is sent as it is.
 #' @return A data frame with `id`, `title`, `pi`, `organization`, `agency`,
 #'   `award_date`, `start_date`, `end_date`, `amount` (funds obligated, US
-#'   dollars), `abstract` and `url`, with attributes `total` (when the API
-#'   reports it), `query` and `retrieved_at`.
+#'   dollars), `abstract` and `url`, with attributes `total` (the number of
+#'   awards NSF reports for the query it received), `scanned` (awards read),
+#'   `match`, `query` and `retrieved_at`.
 #' @examples
 #' \dontrun{
 #' nsf <- search_nsf_awards("psychometrics machine learning", n = 10,
 #'                          date_start = "2024-01-01")
 #' nsf[, c("id", "title", "amount")]
+#' attributes(nsf)[c("total", "scanned", "match")]
 #' }
 #' @export
-search_nsf_awards <- function(keyword, n = 25, date_start = NULL, date_end = NULL) {
+search_nsf_awards <- function(keyword, n = 25, date_start = NULL, date_end = NULL,
+                              match = c("all", "any", "phrase")) {
   if (!is.character(keyword) || length(keyword) != 1 || !nzchar(keyword)) {
     .stop("`keyword` must be one non-empty string.")
   }
+  match <- match.arg(match)
+  n <- as.integer(n)
+  words <- .nsf_words(keyword)
+  # One word, or NSF's own syntax (quotes, wildcards): nothing to combine.
+  if (length(words) < 2 || grepl("[\"*?]", keyword)) match <- "any"
+  query <- Filter(Negate(is.null), list(
+    keyword = if (match == "phrase") paste0("\"", keyword, "\"") else keyword,
+    printFields = paste(.nsf_fields, collapse = ","),
+    startDateStart = .nsf_date(date_start), startDateEnd = .nsf_date(date_end)))
+  if (match == "all") {
+    # NSF returns awards with ANY of the words. Ask for the rarest word, and
+    # keep the awards that also contain the others.
+    counts <- vapply(words, function(w) .nsf_page(replace(query, "keyword", w), 1L, 1L)$total, numeric(1))
+    query$keyword <- if (all(is.na(counts))) words[which.max(nchar(words))] else words[which.min(counts)]
+  }
   rpp <- 25L                                  # the API's maximum per page
-  query <- list(keyword = keyword, printFields = paste(.nsf_fields, collapse = ","),
-                startDateStart = .nsf_date(date_start), startDateEnd = .nsf_date(date_end))
-  query <- Filter(Negate(is.null), query)
+  read_limit <- if (match == "all") max(100L, 4L * n) else n
   rows <- list()
   total <- NA_real_
+  scanned <- 0L
   # NSF numbers records from 1: offset = 1 is the first award.
-  for (page in seq_len(ceiling(n / rpp))) {
-    q <- c(query, list(rpp = min(rpp, n - length(rows)), offset = (page - 1) * rpp + 1))
-    req <- .request(.nsf_url(), auth = "none", query = q, realm = "nsf_awards", rpm = 60)
-    r <- .perform(req)
-    resp <- r$body$response %||% list()
-    note <- resp$serviceNotification
-    if (length(note)) .warn("NSF API: ", .as_text(note))
-    total <- as.numeric(.field(resp, "metadata", "totalCount", default = total))
-    awards <- resp$award %||% list()
-    rows <- c(rows, lapply(awards, .nsf_row))
-    if (length(awards) < q$rpp || length(rows) >= n) break
+  for (page in seq_len(ceiling(read_limit / rpp))) {
+    size <- if (match == "all") rpp else min(rpp, n - length(rows))
+    got <- .nsf_page(query, size, (page - 1L) * rpp + 1L)
+    total <- got$total %|na|% total
+    scanned <- scanned + length(got$awards)
+    found <- lapply(got$awards, .nsf_row)
+    if (match == "all") {
+      found <- Filter(function(a) .has_all_words(paste(a$title, a$abstract), words), found)
+    }
+    rows <- c(rows, found)
+    if (length(got$awards) < size || length(rows) >= n) break
   }
+  rows <- utils::head(rows, n)
   out <- if (length(rows)) do.call(rbind, rows) else .nsf_row(list())[0, ]
   rownames(out) <- NULL
+  if (match == "all" && nrow(out) < n) {
+    .msg("NSF: ", nrow(out), " of the ", scanned, " awards read for \"", query$keyword, "\" (",
+         format(total, big.mark = ","), " in all) contain every word of \"", keyword, "\".")
+  }
   attr(out, "total") <- total
+  attr(out, "scanned") <- scanned
+  attr(out, "match") <- match
   attr(out, "query") <- query
   attr(out, "retrieved_at") <- .now()
   out
+}
+
+# One page of the NSF API: the awards and the number NSF reports in all.
+.nsf_page <- function(query, size, offset) {
+  req <- .request(.nsf_url(), auth = "none", query = c(query, list(rpp = size, offset = offset)),
+                  realm = "nsf_awards", rpm = 60)
+  resp <- .perform(req)$body$response %||% list()
+  note <- resp$serviceNotification
+  if (length(note)) .warn("NSF API: ", .as_text(note))
+  list(awards = resp$award %||% list(),
+       total = as.numeric(.field(resp, "metadata", "totalCount", default = NA_real_)))
+}
+
+# The words of a search that can be looked for: one- and two-letter words
+# ("of", "in") are in almost every abstract and are left out.
+.nsf_words <- function(keyword) {
+  words <- strsplit(trimws(gsub("[\",;]", " ", keyword)), "\\s+")[[1]]
+  unique(words[nchar(words) > 2])
+}
+
+# Does a text contain every word (as a word or as part of one, in any case)?
+.has_all_words <- function(text, words) {
+  text <- tolower(text %|na|% "")
+  all(vapply(tolower(words), function(w) grepl(w, text, fixed = TRUE), logical(1)))
 }
 
 # ---- Grants.gov ------------------------------------------------------------------
@@ -241,7 +312,10 @@ search_nsf_awards <- function(keyword, n = 25, date_start = NULL, date_end = NUL
 #'   `agency`, `agency_code`, `open_date`, `close_date`, `status`,
 #'   `aln` (Assistance Listing numbers) and `url`, with attributes `total`
 #'   and `retrieved_at`. `grants_gov_opportunity()`: a one-row data frame
-#'   with `id`, `number`, `title`, `agency`, `posting_date`, `response_date`,
+#'   with `id`, `number`, `title`, `agency`, `posting_date`, `response_date`
+#'   (the closing date; both dates as `"yyyy-mm-dd"`), `response_note` (the
+#'   agency's remark on the closing date, if any), `estimated` (`TRUE` for a
+#'   forecasted opportunity, whose dates are the agency's estimates),
 #'   `award_ceiling`, `award_floor`, `description` (plain text) and `url`.
 #' @examples
 #' \dontrun{
@@ -294,22 +368,45 @@ grants_gov_opportunity <- function(id) {
   r <- .perform(req)
   .grants_check(r$body)
   d <- r$body$data %||% list()
+  # A posted opportunity has a synopsis. A forecasted one has only a forecast,
+  # whose dates are the agency's estimates under other field names.
   s <- d$synopsis %||% list()
-  desc <- .field(s, "synopsisDesc", default = NA_character_)
-  # The synopsis is HTML; the model and the researcher both want plain text.
+  forecast_only <- !length(s) && length(d$forecast)
+  if (forecast_only) s <- d$forecast
+  desc <- .field(s, if (forecast_only) "forecastDesc" else "synopsisDesc", default = NA_character_)
+  # The description is HTML; the model and the researcher both want plain text.
   if (!is.na(desc)) desc <- as.character(html_to_text(paste0("<body>", desc, "</body>")))
+  note <- as.character(.field(s, if (forecast_only) "estApplicationResponseDateDesc" else "responseDateDesc",
+                              default = NA_character_))
   data.frame(
     id = as.character(.field(d, "id", default = id)),
     number = as.character(.field(d, "opportunityNumber", default = NA_character_)),
     title = as.character(.field(d, "opportunityTitle", default = NA_character_)),
-    agency = as.character(.field(s, "agencyName", default = NA_character_)),
-    posting_date = as.character(.field(s, "postingDate", default = NA_character_)),
-    response_date = as.character(.field(s, "responseDateDesc", default = NA_character_)),
+    agency = as.character(.field(s, "agencyName", default =
+                                   .field(d, "topAgencyDetails", "agencyName", default = NA_character_))),
+    posting_date = .grants_date(s, if (forecast_only) "estSynopsisPostingDate" else "postingDate"),
+    response_date = .grants_date(s, if (forecast_only) "estApplicationResponseDate" else "responseDate"),
+    response_note = if (is.na(note) || !nzchar(trimws(note))) NA_character_ else trimws(note),
+    estimated = isTRUE(as.logical(forecast_only)),
     award_ceiling = suppressWarnings(as.numeric(.field(s, "awardCeiling", default = NA_real_))),
     award_floor = suppressWarnings(as.numeric(.field(s, "awardFloor", default = NA_real_))),
     description = desc,
     url = paste0("https://www.grants.gov/search-results-detail/", id),
     stringsAsFactors = FALSE)
+}
+
+# A Grants.gov date as "yyyy-mm-dd". Each date comes twice: as
+# "<name>Str" ("2026-10-15-00-00-00") and as text ("Oct 15, 2026 12:00:00 AM
+# EDT"); the first is read, the second only when the first is missing.
+.grants_date <- function(s, name) {
+  iso <- as.character(.field(s, paste0(name, "Str"), default = NA_character_))
+  if (!is.na(iso) && grepl("^\\d{4}-\\d{2}-\\d{2}", iso)) return(substr(iso, 1, 10))
+  text <- as.character(.field(s, name, default = NA_character_))
+  m <- regmatches(text, regexec("^([A-Za-z]{3})[a-z]* (\\d{1,2}), (\\d{4})", text))[[1]]
+  if (length(m) != 4) return(NA_character_)
+  month <- match(tolower(m[2]), tolower(month.abb))   # not as.Date("%b"): month names depend on the locale
+  if (is.na(month)) return(NA_character_)
+  sprintf("%s-%02d-%02d", m[4], month, as.integer(m[3]))
 }
 
 # ---- Tools ---------------------------------------------------------------------
@@ -393,8 +490,11 @@ tool_nsf_awards <- function(n = 10) {
               i, r$id, r$title, .money(r$amount), r$pi, r$organization, r$start_date,
               r$end_date, r$url, .shorten(r$abstract %|na|% "", 300))
     }, character(1)) else "No matching awards."
-    head <- sprintf("NSF awards: %s matching; showing %d.",
-                    format(attr(res, "total"), big.mark = ","), nrow(res))
+    head <- if (identical(attr(res, "match"), "all")) {
+      sprintf("NSF awards that contain every search word: %d (of %d awards read).", nrow(res), attr(res, "scanned"))
+    } else {
+      sprintf("NSF awards: %s matching; showing %d.", format(attr(res, "total"), big.mark = ","), nrow(res))
+    }
     .tool_text(c(head, lines), data = res)
   }
   define_tool(fn, name = "nsf_awards",
@@ -402,7 +502,8 @@ tool_nsf_awards <- function(n = 10) {
       "Search awards funded by the US National Science Foundation (NSF Award Search).",
       "Returns award id, title, amount, PI, organization, dates and the start of the abstract."),
     args = list(
-      keyword = arg_string("Search words, for example 'measurement invariance'"),
+      keyword = arg_string(paste("Search words, for example 'measurement invariance'. Every word must",
+                                 "appear in the award, so use two or three words, not a sentence")),
       start_after = arg_string("Optional: only awards starting on or after this date (YYYY-MM-DD)",
                                required = FALSE),
       start_before = arg_string("Optional: only awards starting on or before this date (YYYY-MM-DD)",
@@ -416,8 +517,10 @@ tool_grants_gov <- function(n = 10, status = c("posted", "forecasted")) {
   fn <- function(keyword = NULL, opportunity_id = NULL) {
     if (length(opportunity_id)) {
       d <- grants_gov_opportunity(opportunity_id)
-      text <- sprintf("[%s] %s\nAgency: %s | Posted: %s | Closes: %s | Award: %s to %s\n%s\n\n%s",
-                      d$number, d$title, d$agency, d$posting_date, d$response_date,
+      text <- sprintf("[%s] %s\nAgency: %s | %s: %s | %s: %s | Award: %s to %s\n%s\n\n%s",
+                      d$number, d$title, d$agency,
+                      if (d$estimated) "Expected posting" else "Posted", d$posting_date %|na|% "not given",
+                      if (d$estimated) "Expected closing" else "Closes", d$response_date %|na|% "not given",
                       .money(d$award_floor), .money(d$award_ceiling), d$url,
                       .shorten(d$description %|na|% "", 3000))
       return(.tool_text(text, data = d))

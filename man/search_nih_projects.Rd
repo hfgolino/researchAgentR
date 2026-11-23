@@ -11,6 +11,7 @@ search_nih_projects(
   pi_names = NULL,
   n = 25,
   offset = 0,
+  project_nums = NULL,
   ...
 )
 }
@@ -28,6 +29,11 @@ match).}
 \item{n}{Number of projects to return (at most 500 per request).}
 
 \item{offset}{Number of records to skip, for paging (at most 14,999).}
+
+\item{project_nums}{Optional vector of project numbers, to look projects up
+instead of searching by topic. A full number names one award year
+(\code{"5R01MH123456-03"}); \code{*} stands for any characters, so
+\code{"*R01MH123456*"} finds every year of that project.}
 
 \item{...}{Other RePORTER criteria passed as they are, for example
 \code{org_names = list("UNIVERSITY OF VIRGINIA")}.}
@@ -57,5 +63,7 @@ nih <- search_nih_projects("ecological momentary assessment loneliness",
                            fiscal_years = 2025, agencies = "NIA", n = 10)
 nih[, c("project_num", "title", "award_amount")]
 attr(nih, "total")
+# Look one project up by its number, in every fiscal year:
+search_nih_projects(project_nums = paste0("*", sub("^[0-9]|-.*$", "", nih$project_num[1]), "*"))
 }
 }

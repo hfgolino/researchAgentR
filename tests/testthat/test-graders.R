@@ -117,3 +117,24 @@ test_that("grader_judge grades live and records grading cost (live)", {
   expect_true(is.logical(v$pass))
   expect_true(is.numeric(v$cost))
 })
+
+test_that("typographic punctuation is replaced, in general and before grading", {
+  x <- "p = .03 on a five‑point scale, “never” to ‘often’, 3–5 items​…"
+  expect_equal(plain_punctuation(x), "p = .03 on a five-point scale, \"never\" to 'often', 3-5 items...")
+  expect_equal(plain_punctuation(c("a b", NA)), c("a b", NA))
+  expect_equal(plain_punctuation("café ≥ 2"), "café ≥ 2")     # accents and symbols are kept
+  expect_identical(plain_punctuation(3), 3)
+  # A code grader sees the plain answer (text or structured), so a pattern
+  # written with ordinary spaces matches what the model wrote.
+  g <- grader_code(function(answer, task) grepl("d = 0.71", paste(unlist(answer), collapse = " "), fixed = TRUE))
+  expect_true(g("d = 0.71", list())$pass)
+  expect_true(g(list(result = "d = 0.71"), list())$pass)
+  expect_false(g("d = 0.17", list())$pass)
+  expect_true(grader_exact()("Multivariate Behavioral Research", list(answer = "Multivariate Behavioral Research"))$pass)
+  expect_true(grader_exact()("test–retest", list(answer = "test-retest"))$pass)
+  expect_equal(grader_contains("five-point")("a five‑point scale", list())$score, 1)
+  # the graders stored in the benchmark data do the same
+  data("research_tasks", package = "researchAgentR", envir = environment())
+  i <- which(research_tasks$id == "journal_entropy")
+  expect_true(research_tasks$grader[[i]]("Multivariate Behavioral Research", as.list(research_tasks[i, ]))$pass)
+})

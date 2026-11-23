@@ -87,7 +87,7 @@ register_provider("myserver", "http://localhost:8080/v1", local = TRUE)   # any 
 | Tracing ("Lens") | `view_episode()`, `episodes_df()`, `episode_steps()`, `save_episode()`, `cost_ledger()` |
 | Context and memory | `ctx_window()`, `ctx_compact()`, `ctx_notes()`, `subagent()`, `compress_text()`, `vector_store()`, `embed_texts()`, `ingest_library()` |
 | Research tools | `search_openalex()`, `search_crossref()`, `search_europepmc()`, `search_arxiv()`, `search_nih_projects()`, `search_nsf_awards()`, `search_grants_gov()`, `web_search()`, `read_page()`, `run_r_code()` |
-| Verification | `verify_citations()`, `check_claims()`, `ai_use_statement()` |
+| Verification | `verify_citations()`, `check_claims()`, `plain_punctuation()`, `ai_use_statement()` |
 | Multi-agent | `team()`, `as_tool()`, `fan_out()`, `route()`, `critique_loop()`, `checkpoint()`, `compare_single_vs_team()` |
 | MCP | `mcp_connect()`, `mcp_list_tools()`, `mcp_call()`, `mcp_as_tools()` |
 | Evaluation | `task_set()`, `run_eval()`, `grader_code()`, `grader_judge()`, `pass_at_k()`, `pass_hat_k()`, `paired_bootstrap()`, `plot_frontier()` |

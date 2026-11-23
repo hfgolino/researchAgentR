@@ -277,6 +277,10 @@ drafted <- keep("style_draft", write_in_style(brief, my_style, model = "groq:ope
 cat(drafted)
 attr(drafted, "style_distance")
 attr(drafted, "cost")
+# A model that learned a style from a paper can also reuse the paper's
+# CONTENT. write_in_style() lists, in code, every number and every figure or
+# table reference of the text that is not in the brief:
+attr(drafted, "added")
 
 # A plain paragraph (written for this activity) to rewrite in the style:
 plain <- paste(
@@ -288,19 +292,27 @@ rewritten <- keep("style_rewrite", write_in_style(plain, my_style,
                                                   model = "groq:openai/gpt-oss-120b",
                                                   mode = "rewrite"))
 cat(rewritten)
+attr(rewritten, "added")
 style_distance(plain, my_style)$distance
 attr(rewritten, "style_distance")$distance
 
 # EXPECTED OUTPUT: a single paragraph each time. Where a claim needs a
 # source, the text says [CITATION NEEDED] instead of inventing one. The
 # rewrite keeps every claim of the plain paragraph and changes only the
-# wording. Compare the two distances: the rewrite should be closer to the
-# style than the plain paragraph. Distances of short texts are noisy (a
-# paragraph is far below the 300-word chunks used for the scale).
-# Recorded run (November 22, 2026): draft distance 1.92 (largest z 6.22, for
-# transitions_per_1k), cost 0.0023307; plain 4.633849, rewrite 1.987679. The
-# draft had one [CITATION NEEDED] but also reused TEFI values of the source
-# paper and pointed to a "Figure 3"; the rewrite added "(see Figure 1)".
+# wording. attr(, "added") is character(0) when the text has no number and no
+# figure or table reference beyond those of the brief (the brief and the
+# plain paragraph have none, so anything listed was added by the model).
+# Compare the two distances: the rewrite should be closer to the style than
+# the plain paragraph. Distances of short texts are noisy (a paragraph is far
+# below the 300-word chunks used for the scale).
+#
+# Why the check exists: in the first live run of this activity (November 22,
+# 2026, before the check and before the instruction to use only the content
+# of the brief), the draft read well, had one [CITATION NEEDED], and stated
+# "TEFI values were k(5) = -108.00 and k(10) = -113.38 ... (see Figure 3)":
+# numbers and a figure that belong to the source paper, not to the brief. The
+# rewrite added "(see Figure 1)". Fluent text in your own style is the text
+# you are least likely to read critically.
 
 
 # ==============================================================================
@@ -453,6 +465,10 @@ attr(rewritten, "model")
 #   removed spots are marked.
 # - write_in_style() returns text with [CITATION NEEDED]: by design. Add the
 #   real citation yourself.
+# - write_in_style() prints "not in the brief, so added by the model": the
+#   text has numbers or figure and table references that you did not give.
+#   Remove them or replace them with your own; the check sees numbers and
+#   references only, so read the claims too.
 # - Every generated paragraph is classified correctly (accuracy 1): a single
 #   feature may give the generator away (see Exercise 3). Look at
 #   paragraph_features() for the two groups side by side.

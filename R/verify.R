@@ -346,13 +346,8 @@ tool_verify_citations <- function(check_retraction = TRUE) {
 # Normalize text for quote matching: curly quotes and dashes to plain ones,
 # lower case, single spaces. Only typography is normalized; words must match.
 .normalize_quote <- function(x) {
-  x <- as.character(x)
-  x <- gsub("[\u2018\u2019\u201a\u201b\u2032`]", "'", x)
-  x <- gsub("[\u201c\u201d\u201e\u201f\u2033]", "\"", x)
-  x <- gsub("[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]", "-", x)
-  x <- gsub("\u00a0", " ", x)
-  x <- tolower(x)
-  trimws(gsub("\\s+", " ", x))
+  x <- gsub("`", "'", plain_punctuation(as.character(x)), fixed = TRUE)
+  trimws(gsub("\\s+", " ", tolower(x)))
 }
 
 # Does the quote appear in the source? An ellipsis ("..." or the single

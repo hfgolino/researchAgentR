@@ -82,3 +82,30 @@ test_that("sub_episodes() and route() return typed empty tables", {
   expect_true("route" %in% names(r))
 })
 
+
+test_that("the comparison of one agent with a team counts the workers' tokens", {
+  sub_episodes(clear = TRUE)
+  researchAgentR:::.register_sub_episode(make_ep("child-3", 0.5), "worker")            # 110 tokens
+  researchAgentR:::.register_sub_episode(make_ep("grandchild-3", 0.1), "worker")       # 110 tokens
+  researchAgentR:::.register_sub_episode(make_ep("child-4", 0.2, child = "grandchild-3"), "worker")
+  expect_equal(researchAgentR:::.worker_tokens(make_ep("alone", 0.1)), 0)
+  expect_equal(researchAgentR:::.worker_tokens(make_ep("lead-3", 0.1, child = "child-3")), 110)
+  expect_equal(researchAgentR:::.worker_tokens(make_ep("lead-4", 0.1, child = "child-4")), 220)   # workers of workers too
+  expect_equal(researchAgentR:::.worker_tokens(make_ep("lead-5", 0.1, child = "not-kept")), 0)
+  sub_episodes(clear = TRUE)
+})
+
+test_that("compare_single_vs_team gives each run its own place in the cache", {
+  skip_on_cran()   # tries a connection (nothing listens on port 9)
+  old <- options(researchAgentR.max_tries = 1); on.exit(options(old))
+  suppressMessages(register_provider("nothing_here", "http://localhost:9/v1", local = TRUE))
+  a <- agent("a", "Answer briefly.", model = "nothing_here:none")
+  env <- researchAgentR:::.pkg_env
+  env$cache_salt <- "outer"
+  cmp <- compare_single_vs_team(a, a, rep("Same task.", 2), budget(max_steps = 1, max_seconds = 20))
+  expect_equal(env$cache_salt, "outer"); env$cache_salt <- NULL                   # restored
+  expect_equal(cmp$arm, c("single", "single", "team", "team"))
+  expect_true(all(c("tokens", "worker_tokens", "total_tokens") %in% names(cmp)))
+  expect_equal(cmp$total_tokens, cmp$tokens + cmp$worker_tokens)
+  expect_true(all(grepl("^api_error: Nothing answered", cmp$stop_reason)))        # no model here: counted, not dropped
+})

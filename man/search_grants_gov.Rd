@@ -26,7 +26,10 @@ grants_gov_opportunity(id)
 \code{agency}, \code{agency_code}, \code{open_date}, \code{close_date}, \code{status},
 \code{aln} (Assistance Listing numbers) and \code{url}, with attributes \code{total}
 and \code{retrieved_at}. \code{grants_gov_opportunity()}: a one-row data frame
-with \code{id}, \code{number}, \code{title}, \code{agency}, \code{posting_date}, \code{response_date},
+with \code{id}, \code{number}, \code{title}, \code{agency}, \code{posting_date}, \code{response_date}
+(the closing date; both dates as \code{"yyyy-mm-dd"}), \code{response_note} (the
+agency's remark on the closing date, if any), \code{estimated} (\code{TRUE} for a
+forecasted opportunity, whose dates are the agency's estimates),
 \code{award_ceiling}, \code{award_floor}, \code{description} (plain text) and \code{url}.
 }
 \description{

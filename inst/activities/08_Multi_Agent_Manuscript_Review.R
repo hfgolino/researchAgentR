@@ -273,13 +273,15 @@ fan <- fan_out(section_reviewer, section_tasks,
                budget = budget(max_steps = 4, max_cost = 0.01, max_seconds = 120))
 fan
 summary(fan)
-# EXPECTED OUTPUT: one row per section (stop_reason, model_calls, tokens,
+# EXPECTED OUTPUT: a first line that counts the runs with and without an
+# answer, one row per section (stop_reason, answered, model_calls, tokens,
 # cost, seconds), then the total cost, the summed time and the wall-clock
-# time. With the mirai package installed, wall-clock time is below the summed
-# time; the COST is the same either way.
-# Recorded run (November 22, 2026): "<fan_out> 8 tasks | 0 failed", but only
-# 1 task stopped with final_answer (4 with max_steps, 3 with
-# max_tool_errors); total cost $0.00294, summed time 13.2 s, wall-clock 4.2 s.
+# time. With the mirai package installed, the runs happen in background R
+# processes and wall-clock time is below the summed time; the COST is the
+# same either way. A background process starts with an empty workspace:
+# fan_out() copies to it the objects that the agent's tools use (here `docs`,
+# which read_section() reads). A run can end without an R error and without
+# an answer (max_steps, max_tool_errors): read the stop_reason column.
 
 fan_issues <- do.call(rbind, lapply(fan, function(e)
   if (length(e$answer$issues)) do.call(rbind, lapply(e$answer$issues, as.data.frame))))
@@ -468,18 +470,20 @@ single_reviewer <- agent(
   tools = list(section_tool),
   output_schema = issue_schema)
 
-# Same tasks, same budget, both arms. Two trials each show the variability;
-# the budget caps the WHOLE team (worker costs are part of the lead's ledger).
+# Same tasks, same budget, both arms. The task is given twice, and each run
+# is an independent trial (its own place in the cache), so two rows per arm
+# show the variability. The budget caps the WHOLE team: worker costs are part
+# of the lead's ledger.
 equal_budget <- budget(max_steps = 14, max_cost = 0.08, max_seconds = 900)
 cmp <- compare_single_vs_team(single_reviewer, review_team,
                               tasks = rep(task_review, 2), budget = equal_budget)
-cmp[, c("arm", "stop_reason", "model_calls", "tool_calls", "tokens", "peak_context", "cost", "seconds")]
+cmp[, c("arm", "stop_reason", "model_calls", "tool_calls", "tokens", "total_tokens",
+        "peak_context", "cost", "seconds")]
 # EXPECTED OUTPUT: four rows (single, single, team, team) with the stop
-# reason and the ledger of each episode.
-# Recorded run (November 22, 2026): all four stopped with final_answer; both
-# single rows showed 10 model calls and 37094 tokens (the second with cost 0
-# and about 0.05 seconds); the team rows showed 7 and 8 model calls, 15940
-# and 19868 tokens, and costs 0.008301225 and 0.007947600.
+# reason and the ledger of each episode. `tokens` counts the calls of the
+# agent itself (for the team, the lead only); `total_tokens` adds the tokens
+# of the workers, so it is the column to compare between the arms. `cost`
+# already includes the workers.
 
 # Grade each episode's answer with the same patterns (no functions):
 eps <- c(attr(cmp, "episodes")$single, attr(cmp, "episodes")$team)
@@ -494,15 +498,12 @@ for (e in seq_along(eps)) {
   }
   cmp$n_issues[e] <- nrow(issues)
 }
-cmp[, c("arm", "caught", "n_issues", "cost", "tokens")]
-aggregate(cbind(caught, n_issues, cost, tokens) ~ arm, data = cmp, FUN = mean)
+cmp[, c("arm", "caught", "n_issues", "cost", "total_tokens")]
+aggregate(cbind(caught, n_issues, cost, total_tokens) ~ arm, data = cmp, FUN = mean)
 # EXPECTED OUTPUT: planted errors caught (0 to 6), issues reported, cost and
-# tokens per episode, then the mean of each arm. Decide with these numbers,
-# not with impressions: does the team catch more, and at what price per
-# planted error caught?
-# Recorded run (November 22, 2026): single caught 4 and 4 (7 issues each),
-# team caught 2 and 1 (12 and 11 issues); arm means: single 4.0 caught at
-# cost 0.002918325, team 1.5 caught at cost 0.008124413.
+# tokens per episode (workers included), then the mean of each arm. Decide
+# with these numbers, not with impressions: does the team catch more, and at
+# what price per planted error caught?
 
 # Put all methods side by side (cost per planted error caught):
 arm_means <- aggregate(cbind(caught, cost) ~ arm, data = cmp, FUN = mean)

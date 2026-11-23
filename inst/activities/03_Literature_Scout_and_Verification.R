@@ -241,7 +241,7 @@ toy <- data.frame(
   database = c("OpenAlex", "OpenAlex", "OpenAlex", "Crossref", "Crossref", "Semantic Scholar"))
 
 toy_dedup <- dedupe_records(toy)
-toy_dedup[, c("title", "doi", "database", "n_found")]
+toy_dedup[, c("title", "doi", "database", "n_databases", "n_found")]
 attr(toy_dedup, "dedup")
 # EXPECTED OUTPUT (computed from the toy table, so the numbers are exact):
 #   dedupe_records(): 6 records in, 3 duplicates removed (2 by DOI, 1 by title and year), 3 out.
@@ -262,16 +262,16 @@ nrow(all_records)
 
 deduped <- dedupe_records(all_records)
 attr(deduped, "dedup")
-table(deduped$n_found)                    # how many databases found each record
-head(deduped[order(-deduped$n_found), c("title", "year", "database", "n_found")])
+table(deduped$n_databases)                # how many databases found each record
+head(deduped[order(-deduped$n_databases, -deduped$n_found),
+             c("title", "year", "database", "n_databases", "n_found")])
 # EXPECTED OUTPUT: a message with records in, duplicates removed by DOI and by
-# title and year, and records out; a table of n_found (most records are found
-# once). n_found counts the records merged into a row, so it can exceed the
-# number of databases when one database returns several versions of a work.
+# title and year, and records out; a table of n_databases (most records are
+# found by one database). n_found counts the RECORDS merged into a row, so it
+# exceeds n_databases when one database returns several versions of a work
+# (a preprint and the published article, for example).
 # Recorded run (November 22, 2026): 135 records in, 18 duplicates removed (11
-# by DOI, 7 by title and year), 117 out; n_found was 1 for 103 records, 2 for
-# 11, 3 for 2 and 4 for 1. The row with n_found 4 lists "OpenAlex; Europe
-# PMC", and one row with n_found 3 lists only "Crossref".
+# by DOI, 7 by title and year), 117 out.
 
 
 # ==============================================================================

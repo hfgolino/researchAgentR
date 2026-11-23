@@ -256,6 +256,11 @@ team <- function(name, instructions, workers, model = default_model("lead"),
 #' money: the summed cost is the same, and parallel calls reach free-tier
 #' rate limits sooner.
 #'
+#' A background process starts with an empty workspace. The objects of the
+#' workspace that the agent's tools use (a data frame a tool reads, a helper
+#' function it calls) are copied to it, and the packages attached in the
+#' session are attached there too, so a tool that works in [run()] works here.
+#'
 #' Only use it for read-only tasks: parallel workers that write files or
 #' send messages can conflict.
 #'
@@ -268,9 +273,12 @@ team <- function(name, instructions, workers, model = default_model("lead"),
 #'   A run that failed with an R error is kept as an episode with no steps and
 #'   stop reason `"error: ..."`, and is counted in the summary. `summary(x)`
 #'   (also `attr(x, "summary")`) gives one row per task: `task`,
-#'   `stop_reason`, `model_calls`, `tokens`, `cost`, `seconds`; its
-#'   attributes give `total_cost`, `summed_seconds`, `wall_seconds` and
-#'   `failures`.
+#'   `stop_reason`, `answered` (did the run end with an answer?),
+#'   `model_calls`, `tokens`, `cost`, `seconds`; its attributes give
+#'   `total_cost`, `summed_seconds`, `wall_seconds`, `answered` (runs with an
+#'   answer) and `failures` (runs that ended with an R error). A run can end
+#'   without an error and without an answer (a step or tool-error limit):
+#'   read `stop_reason`.
 #' @examples
 #' \dontrun{
 #' summarizer <- agent("summarizer", "Summarize the paper with this DOI in two sentences.",
@@ -310,21 +318,9 @@ fan_out <- function(agent, tasks, budget = researchAgentR::budget(), parallel = 
 .fan_out_mirai <- function(agent, tasks, budget, workers) {
   mirai::daemons(workers)
   on.exit(mirai::daemons(0), add = TRUE)
-  # Background processes start empty: pass the session's package settings
-  # (keys set with set_*_key(), default models, options, cache mode).
-  keys <- .pkg_env$keys %||% list()
-  settings <- list(
-    env = stats::setNames(as.character(unlist(keys)), .key_vars[names(keys)]),
-    defaults = .pkg_env$defaults %||% list(),
-    options = options()[grepl("^researchAgentR\\.", names(options()))],
-    cache = .cache_mode(), cache_dir = cache_dir())
+  settings <- .background_settings(agent)
   jobs <- lapply(tasks, function(task) mirai::mirai({
-    if (length(settings$env)) do.call(Sys.setenv, as.list(settings$env))
-    options(settings$options)
-    for (role in names(settings$defaults)) {
-      researchAgentR::set_default_model(role, settings$defaults[[role]])
-    }
-    researchAgentR::use_cache(settings$cache, settings$cache_dir)
+    asNamespace("researchAgentR")$.background_setup(settings)
     researchAgentR::run(agent, task, budget, verbose = FALSE)
   }, agent = agent, task = task, budget = budget, settings = settings))
   Map(function(job, task) {
@@ -334,6 +330,78 @@ fan_out <- function(agent, tasks, budget = researchAgentR::budget(), parallel = 
   }, jobs, tasks)
 }
 
+# A background process starts empty. What it needs from this session: the
+# package settings (keys set with set_*_key(), default models, options, cache
+# mode), the attached packages, and the workspace objects the tools use.
+.background_settings <- function(agent) {
+  keys <- .pkg_env$keys %||% list()
+  list(
+    env = stats::setNames(as.character(unlist(keys)), .key_vars[names(keys)]),
+    defaults = .pkg_env$defaults %||% list(),
+    options = options()[grepl("^researchAgentR\\.", names(options()))],
+    cache = .cache_mode(), cache_dir = cache_dir(),
+    packages = rev(.packages()),
+    workspace = .workspace_objects(.tool_functions(agent)))
+}
+
+# Runs in the background process, before the agent.
+.background_setup <- function(settings) {
+  if (length(settings$env)) do.call(Sys.setenv, as.list(settings$env))
+  options(settings$options)
+  for (role in names(settings$defaults)) set_default_model(role, settings$defaults[[role]])
+  use_cache(settings$cache, settings$cache_dir)
+  for (pkg in settings$packages) {
+    suppressWarnings(suppressPackageStartupMessages(
+      try(library(pkg, character.only = TRUE), silent = TRUE)))
+  }
+  list2env(settings$workspace, envir = globalenv())
+  invisible(NULL)
+}
+
+# The R functions behind an agent's tools, including the tools of agents
+# that it uses as tools.
+.tool_functions <- function(agent) {
+  out <- list()
+  for (tool in agent$tools %||% list()) {
+    out <- c(out, list(tool$fn))
+    worker <- if (inherits(tool, "agent_tool")) environment(tool$fn)$worker
+    if (inherits(worker, "agent")) out <- c(out, .tool_functions(worker))
+  }
+  out
+}
+
+# Does a function look names up in the workspace (the global environment)?
+# A function of a package does not: its search stops at the namespace.
+.sees_workspace <- function(f) {
+  env <- environment(f)
+  while (!is.null(env) && !identical(env, emptyenv())) {
+    if (identical(env, globalenv())) return(TRUE)
+    if (isNamespace(env)) return(FALSE)
+    env <- parent.env(env)
+  }
+  FALSE
+}
+
+# The workspace objects that these functions name, and those that the
+# functions among them name in turn (a tool that calls a helper that reads a
+# data frame needs all three).
+.workspace_objects <- function(fns) {
+  found <- list()
+  while (length(fns)) {
+    f <- fns[[1]]
+    fns <- fns[-1]
+    if (!is.function(f) || is.primitive(f) || !.sees_workspace(f)) next
+    used <- unique(c(all.names(body(f)), unlist(lapply(formals(f), all.names))))
+    for (name in setdiff(used[nzchar(used)], names(found))) {
+      if (exists(name, envir = globalenv(), inherits = FALSE)) {
+        found[[name]] <- get(name, envir = globalenv(), inherits = FALSE)
+        fns <- c(fns, list(found[[name]]))
+      }
+    }
+  }
+  found
+}
+
 # The arithmetic behind summary(fan_out): per-task rows and the totals that
 # show the point of parallelism (wall-clock time below summed time, cost unchanged).
 .fan_out_summary <- function(episodes, wall_seconds) {
@@ -341,13 +409,14 @@ fan_out <- function(agent, tasks, budget = researchAgentR::budget(), parallel = 
     t <- .totals(e)
     failed <- !length(e$steps) && grepl("^error:", e$stop_reason %||% "")
     data.frame(task = .shorten(e$task, 60), stop_reason = e$stop_reason %||% NA_character_,
-               model_calls = t$model_calls, tokens = t$tokens,
+               answered = !is.null(e$answer), model_calls = t$model_calls, tokens = t$tokens,
                cost = if (failed) NA_real_ else t$cost,
                seconds = e$seconds %||% NA_real_, stringsAsFactors = FALSE)
   })
   df <- if (length(rows)) do.call(rbind, rows) else
-    data.frame(task = character(0), stop_reason = character(0), model_calls = integer(0),
-               tokens = numeric(0), cost = numeric(0), seconds = numeric(0))
+    data.frame(task = character(0), stop_reason = character(0), answered = logical(0),
+               model_calls = integer(0), tokens = numeric(0), cost = numeric(0), seconds = numeric(0))
+  attr(df, "answered") <- sum(df$answered)
   attr(df, "total_cost") <- sum(df$cost, na.rm = TRUE)
   attr(df, "summed_seconds") <- sum(df$seconds, na.rm = TRUE)
   attr(df, "wall_seconds") <- wall_seconds
@@ -361,7 +430,10 @@ summary.fan_out <- function(object, ...) attr(object, "summary")
 #' @export
 print.fan_out <- function(x, ...) {
   s <- attr(x, "summary")
-  cat(sprintf("<fan_out> %d tasks | %d failed\n", nrow(s), attr(s, "failures")))
+  # A run can end without an R error and still without an answer (a step or
+  # tool-error limit), so the two are counted separately.
+  cat(sprintf("<fan_out> %d tasks: %d with an answer, %d without (%d stopped by an R error)\n",
+              nrow(s), attr(s, "answered"), nrow(s) - attr(s, "answered"), attr(s, "failures")))
   print(s, row.names = FALSE)
   cat(sprintf("Total cost $%.5f | summed time %.1f s | wall-clock %.1f s\n",
               attr(s, "total_cost"), attr(s, "summed_seconds"), attr(s, "wall_seconds")))
@@ -457,7 +529,10 @@ route <- function(input, routes, method = c("llm", "embedding"), model = NULL,
   total_cost <- attr(emb, "cost") %||% attr(emb, "usage")$cost %||% NA_real_
   out <- data.frame(
     input = input, route = names(routes)[best], probability = prob[cbind(seq_len(n), best)],
-    reason = sprintf("cosine similarity %.3f", sim[cbind(seq_len(n), best)]),
+    # both numbers: the similarity is what was measured, the weight (column
+    # `probability`) is what a threshold is compared with
+    reason = sprintf("cosine similarity %.3f, weight %.2f", sim[cbind(seq_len(n), best)],
+                     prob[cbind(seq_len(n), best)]),
     cost = total_cost / n, stringsAsFactors = FALSE)
   attr(out, "probabilities") <- prob
   out
@@ -667,23 +742,50 @@ checkpoint_log <- function(clear = FALSE) {
 #' cost), so `max_cost` caps the whole team. Step and token limits apply to
 #' the lead's own calls. Grade the answers with the evaluation harness.
 #'
+#' A task that is given more than once counts as that many independent
+#' trials: each run has its own place in the response cache (as in
+#' [run_eval()]), so the second run is not a replay of the first.
+#'
 #' @param single An [agent()].
 #' @param team A [team()] (or any agent).
 #' @param tasks A character vector of tasks.
 #' @param budget Limits for each episode of both arms, from [budget()].
 #' @return The rows of [episodes_df()] for both arms, with a column `arm`
-#'   (`"single"` or `"team"`); the episodes are in `attr(x, "episodes")`.
+#'   (`"single"` or `"team"`) and two more token columns: `tokens` counts the
+#'   calls of the agent itself (for a team, the lead), `worker_tokens` the
+#'   calls of the workers it started, and `total_tokens` is their sum. The
+#'   episodes are in `attr(x, "episodes")`.
 #' @examples
 #' \dontrun{
 #' cmp <- compare_single_vs_team(solo, lead, tasks, budget(max_cost = 0.02))
-#' aggregate(cost ~ arm, cmp, mean)
+#' aggregate(cbind(cost, total_tokens) ~ arm, cmp, mean)
 #' }
 #' @export
 compare_single_vs_team <- function(single, team, tasks, budget = researchAgentR::budget()) {
-  eps_single <- lapply(tasks, function(t) .run_safely(single, t, budget))
-  eps_team <- lapply(tasks, function(t) .run_safely(team, t, budget))
+  base_salt <- .pkg_env$cache_salt
+  on.exit(.pkg_env$cache_salt <- base_salt, add = TRUE)
+  run_arm <- function(agent, arm) {
+    lapply(seq_along(tasks), function(i) {
+      .pkg_env$cache_salt <- paste(base_salt %||% "", "compare", arm, i, sep = ":")
+      .run_safely(agent, tasks[[i]], budget)
+    })
+  }
+  eps_single <- run_arm(single, "single")
+  eps_team <- run_arm(team, "team")
   df <- rbind(cbind(arm = "single", episodes_df(eps_single)),
               cbind(arm = "team", episodes_df(eps_team)))
+  # The tokens of the whole design: a worker's cost is inside its parent's
+  # tool step, but its tokens are only in its own episode.
+  df$worker_tokens <- vapply(c(eps_single, eps_team), .worker_tokens, numeric(1))
+  df$total_tokens <- df$tokens + df$worker_tokens
   attr(df, "episodes") <- list(single = eps_single, team = eps_team)
   df
+}
+
+# Billed tokens of every sub-episode an episode started (kept in this session).
+.worker_tokens <- function(ep) {
+  ids <- .child_ids(ep)
+  ids <- ids[vapply(ids, exists, logical(1), envir = .sub_episode_env, inherits = FALSE)]
+  sum(vapply(ids, function(id) .totals(get(id, envir = .sub_episode_env, inherits = FALSE))$tokens,
+             numeric(1)))
 }
